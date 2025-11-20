@@ -1,0 +1,43 @@
+{
+  "name": "riftbound-deck-codes",
+  "version": "1.0.0",
+  "description": "Encode and decode Riftbound TCG decks to/from shareable strings",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "riftbound",
+    "tcg",
+    "deck",
+    "encoder",
+    "decoder",
+    "league-of-legends",
+    "trading-card-game"
+  ],
+  "author": "Piltover Archive",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Piltover-Archive/RiftboundDeckCodes.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Piltover-Archive/RiftboundDeckCodes/issues"
+  },
+  "homepage": "https://piltoverarchive.com",
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
