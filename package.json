@@ -1,5 +1,5 @@
 {
-  "name": "riftbound-deck-codes",
+  "name": "@piltoverarchive/riftbound-deck-codes",
   "version": "1.0.0",
   "description": "Encode and decode Riftbound TCG decks to/from shareable strings",
   "main": "dist/index.js",

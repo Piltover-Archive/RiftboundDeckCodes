@@ -1,4 +1,10 @@
-# RiftboundDeckCodes
+<div align="center">
+  <img src="https://cdn.piltoverarchive.com/PiltoverArchive.webp" alt="Piltover Archive" width="200"/>
+
+  # RiftboundDeckCodes
+
+  **By [Piltover Archive](https://piltoverarchive.com)**
+</div>
 
 The RiftboundDeckCodes library can be used to encode/decode Riftbound TCG decks to/from simple strings. Below is an example code for a Kai'Sa deck with sideboard.
 
@@ -81,14 +87,14 @@ Variants are mapped as follows:
 ## Installation
 
 ```bash
-npm install riftbound-deck-codes
+npm install @piltoverarchive/riftbound-deck-codes
 ```
 
 Or using other package managers:
 
 ```bash
-yarn add riftbound-deck-codes
-pnpm add riftbound-deck-codes
+yarn add @piltoverarchive/riftbound-deck-codes
+pnpm add @piltoverarchive/riftbound-deck-codes
 ```
 
 ## Usage
@@ -96,8 +102,8 @@ pnpm add riftbound-deck-codes
 ### Encoding a Deck
 
 ```typescript
-import { getCodeFromDeck } from "riftbound-deck-codes";
-import type { Deck } from "riftbound-deck-codes";
+import { getCodeFromDeck } from "@piltoverarchive/riftbound-deck-codes";
+import type { Deck } from "@piltoverarchive/riftbound-deck-codes";
 
 // Kai'Sa deck
 const mainDeck: Deck = [
@@ -147,8 +153,8 @@ console.log(deckCodeNoSideboard);
 ### Decoding a Deck
 
 ```typescript
-import { getDeckFromCode } from "riftbound-deck-codes";
-import type { DeckWithSideboard } from "riftbound-deck-codes";
+import { getDeckFromCode } from "@piltoverarchive/riftbound-deck-codes";
+import type { DeckWithSideboard } from "@piltoverarchive/riftbound-deck-codes";
 
 const code =
   "CIAAAAAAAAAQCAAAA4AACAIAABMQAAILAAAAICIMDMOVOX3AM5UHIAIDAAACO6XYAEAQKAAABX3QDGACUABKIAQAAEBQAAAWDBOQCAQAABMHE";
