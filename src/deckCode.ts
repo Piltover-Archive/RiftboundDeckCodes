@@ -9,7 +9,7 @@ import type {
 import VarintTranslator from "./VarintTranslator";
 
 const FORMAT = 1;
-const VERSION = 2;
+const VERSION = 3;
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 /**
@@ -248,21 +248,48 @@ function decodeDeckSection(
  * Encodes a Riftbound deck into a shareable deck code
  * @param mainDeck - The main deck cards
  * @param sideboard - Optional sideboard cards (defaults to empty array)
+ * @param chosenChampion - Optional chosen champion card code (e.g., "OGN-007")
  * @returns Base32-encoded deck code string
  * @throws Error if deck format is invalid
  */
-export function getCodeFromDeck(mainDeck: Deck, sideboard: Deck = []): string {
+export function getCodeFromDeck(
+  mainDeck: Deck,
+  sideboard: Deck = [],
+  chosenChampion?: string
+): string {
   const bytes: number[] = [];
 
-  // Write format and version (always version 2)
+  // Write format and version (always version 3)
   bytes.push((FORMAT << 4) | VERSION);
 
   // Encode main deck (counts 1-12)
   bytes.push(...encodeDeckSection(mainDeck, 12));
 
   // Encode sideboard (counts 1-3 only, since sideboards can't have runes/battlefields)
-  // Empty sideboard will encode as three 0-byte varints (3 bytes total)
   bytes.push(...encodeDeckSection(sideboard, 3));
+
+  // Encode chosen champion (version 3+)
+  if (chosenChampion) {
+    const { set, number, variant } = parseCardCode(chosenChampion);
+    const setValue = SET_MAP[set];
+    if (setValue === undefined) {
+      throw new Error(
+        `Unknown set in chosen champion: ${set}. Valid sets: ${Object.keys(SET_MAP).join(", ")}`
+      );
+    }
+    const variantValue = VARIANT_MAP[variant];
+    if (variantValue === undefined) {
+      throw new Error(
+        `Unknown variant in chosen champion: '${variant}'. Valid variants: ${Object.keys(VARIANT_MAP).join(", ")}`
+      );
+    }
+    bytes.push(0x01); // Champion present flag
+    bytes.push(setValue);
+    bytes.push(variantValue);
+    bytes.push(...VarintTranslator.GetVarint(parseInt(number)));
+  } else {
+    bytes.push(0x00); // No champion flag
+  }
 
   return base32Encode(new Uint8Array(bytes));
 }
@@ -311,9 +338,44 @@ export function getDeckFromCode(
     sideboard = decodeDeckSection(translator, 3, signedSuffix);
   }
 
+  // Decode chosen champion (version 3+ only)
+  let chosenChampion: string | undefined;
+  if (version >= 3) {
+    const hasChampion = translator.get(0);
+    translator.sliceAndSet(1);
+
+    if (hasChampion === 0x01) {
+      const set = translator.get(0);
+      const variant = translator.get(1);
+      translator.sliceAndSet(2);
+      const cardNumber = translator.PopVarint();
+
+      const setCode = Object.entries(SET_MAP).find(
+        ([_, value]) => value === set
+      )?.[0];
+
+      if (!setCode) {
+        throw new Error(`Unknown set code in champion: ${set}`);
+      }
+
+      // For signed cards (variant 2), use the signedSuffix option
+      let variantCode: string | undefined;
+      if (variant === 2) {
+        variantCode = signedSuffix;
+      } else {
+        variantCode = Object.entries(VARIANT_MAP).find(
+          ([_, value]) => value === variant
+        )?.[0];
+      }
+
+      chosenChampion = `${setCode}-${cardNumber.toString().padStart(3, "0")}${variantCode || ""}`;
+    }
+  }
+
   return {
     mainDeck,
     sideboard,
+    chosenChampion,
   };
 }
 

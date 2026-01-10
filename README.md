@@ -36,7 +36,8 @@ All encodings begin with 4 bits for format and 4 bits for version.
 | Format | Version | Date              | About                                                                     |
 | ------ | ------- | ----------------- | ------------------------------------------------------------------------- |
 | 1      | 1       | April 1, 2025     | Initial release. Supports main deck encoding.                             |
-| 1      | 2       | November 20, 2025 | Adds sideboard support. All new codes encode as V2 (backward compatible). |
+| 1      | 2       | November 20, 2025 | Adds sideboard support.                                                   |
+| 1      | 3       | January 10, 2026  | Adds chosen champion support. All new codes encode as V3.                 |
 
 The list of cards are then encoded according to the following scheme:
 
@@ -140,16 +141,17 @@ const sideboard: Deck = [
   { cardCode: "OGN-114", count: 1 },
 ];
 
-// Encode with sideboard
-const deckCode = getCodeFromDeck(mainDeck, sideboard);
+// Encode with sideboard and chosen champion
+const deckCode = getCodeFromDeck(mainDeck, sideboard, "OGN-103");
 console.log(deckCode);
-// Output: CIAAAAAAAAAQCAAAA4AACAIAABMQAAILAAAAICIMDMOVOX3AM5UHIAIDAAACO6XYAEAQKAAABX3QDGACUABKIAQAAEBQAAAWDBOQCAQAABMHE
 
-// Encode without sideboard (empty sideboard encoded as V2)
-const deckCodeNoSideboard = getCodeFromDeck(mainDeck);
+// Encode without chosen champion
+const deckCodeNoChampion = getCodeFromDeck(mainDeck, sideboard);
+console.log(deckCodeNoChampion);
+
+// Encode without sideboard (pass empty array for sideboard)
+const deckCodeNoSideboard = getCodeFromDeck(mainDeck, [], "OGN-103");
 console.log(deckCodeNoSideboard);
-// Output: CIAAAAAAAAAQCAAAA4AACAIAABMQAAILAAAAICIMDMOVOX3AM5UHIAIDAAACO6XYAEAQKAAABX3QDGACUABKIAQAAAAA
-// Note: ~5 character overhead for empty sideboard encoding
 ```
 
 ### Decoding a Deck
@@ -168,6 +170,9 @@ console.log("Main Deck:", decoded.mainDeck);
 
 console.log("Sideboard:", decoded.sideboard);
 // 8 cards: 2x OGN-022, 2x OGN-024, 2x OGN-093, 1x OGN-088, 1x OGN-114
+
+console.log("Chosen Champion:", decoded.chosenChampion);
+// The chosen champion card code (e.g., "OGN-103") or undefined if not set
 ```
 
 ### Decoding Options
@@ -191,8 +196,8 @@ const starDecode = getDeckFromCode(code, { signedSuffix: "*" });
 
 - **No Game Rule Validation**: This library only encodes/decodes deck data. It does not validate Riftbound game rules (card limits, sideboard size, etc.). Validation should be done in your application.
 - **Card Counts**: Main deck supports counts 1-12 (for runes and standard cards). Sideboard only supports counts 1-3 (optimized for regular cards only).
-- **Always Version 2**: All new deck codes encode as Version 2, even without a sideboard. Empty sideboards add ~5 characters overhead.
-- **Backward Compatibility**: Can decode Version 1 codes (without sideboard section) which return an empty sideboard array.
+- **Always Version 3**: All new deck codes encode as Version 3. The chosen champion section adds 1 byte (no champion) or 4-5 bytes (with champion).
+- **Backward Compatibility**: Can decode Version 1/2 codes which return `chosenChampion: undefined`.
 
 ## Implementations
 
@@ -202,7 +207,7 @@ The TypeScript implementation in this repository is the reference implementation
 
 | Name               | Language   | Version\* | Maintainer      |
 | ------------------ | ---------- | --------- | --------------- |
-| RiftboundDeckCodes | TypeScript | 2         | PiltoverArchive |
+| RiftboundDeckCodes | TypeScript | 3         | PiltoverArchive |
 
 \*Version refers to the MAX_KNOWN_VERSION supported by the implementation.
 

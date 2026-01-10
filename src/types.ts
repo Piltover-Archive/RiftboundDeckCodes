@@ -8,6 +8,7 @@ export type Deck = Card[];
 export interface DeckWithSideboard {
 	mainDeck: Deck;
 	sideboard: Deck;
+	chosenChampion?: string;
 }
 
 export interface SetVariantGroup {
