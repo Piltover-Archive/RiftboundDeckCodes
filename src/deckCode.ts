@@ -1,5 +1,11 @@
 import { SET_MAP, VARIANT_MAP } from "./mappings";
-import type { Deck, Card, SetVariantGroup, DeckWithSideboard } from "./types";
+import type {
+  Deck,
+  Card,
+  SetVariantGroup,
+  DeckWithSideboard,
+  DecodeOptions,
+} from "./types";
 import VarintTranslator from "./VarintTranslator";
 
 const FORMAT = 1;
@@ -84,7 +90,7 @@ function parseCardCode(cardCode: string): {
     );
   }
 
-  const match = rest.match(/^(\d+)([a-z]?)$/);
+  const match = rest.match(/^(\d+)([a-z*]?)$/);
   if (!match) {
     throw new Error(
       `Invalid card code format: ${cardCode}. Expected format: SET-NUMBERvariant`
@@ -185,10 +191,12 @@ function encodeDeckSection(deck: Deck, maxCount: number = 12): number[] {
  * Decodes a deck section from bytes
  * @param translator - The varint translator
  * @param maxCount - Maximum count to process (12 for main deck, 3 for sideboard)
+ * @param signedSuffix - The suffix to use for signed cards ('s' or '*')
  */
 function decodeDeckSection(
   translator: VarintTranslator,
-  maxCount: number = 12
+  maxCount: number = 12,
+  signedSuffix: "s" | "*" = "s"
 ): Deck {
   const deck: Deck = [];
 
@@ -205,9 +213,16 @@ function decodeDeckSection(
       const setCode = Object.entries(SET_MAP).find(
         ([_, value]) => value === set
       )?.[0];
-      const variantCode = Object.entries(VARIANT_MAP).find(
-        ([_, value]) => value === variant
-      )?.[0];
+
+      // For signed cards (variant 2), use the signedSuffix option
+      let variantCode: string | undefined;
+      if (variant === 2) {
+        variantCode = signedSuffix;
+      } else {
+        variantCode = Object.entries(VARIANT_MAP).find(
+          ([_, value]) => value === variant
+        )?.[0];
+      }
 
       if (!setCode) {
         throw new Error(`Unknown set code: ${set}`);
@@ -255,10 +270,15 @@ export function getCodeFromDeck(mainDeck: Deck, sideboard: Deck = []): string {
 /**
  * Decodes a Riftbound deck code into deck and sideboard
  * @param code - Base32-encoded deck code string
+ * @param options - Optional decode options
  * @returns Object containing mainDeck and sideboard arrays
  * @throws Error if code is invalid or unsupported
  */
-export function getDeckFromCode(code: string): DeckWithSideboard {
+export function getDeckFromCode(
+  code: string,
+  options?: DecodeOptions
+): DeckWithSideboard {
+  const signedSuffix = options?.signedSuffix ?? "s";
   const bytes = base32Decode(code);
   const translator = new VarintTranslator(bytes);
 
@@ -282,13 +302,13 @@ export function getDeckFromCode(code: string): DeckWithSideboard {
   }
 
   // Decode main deck (counts 1-12)
-  const mainDeck = decodeDeckSection(translator, 12);
+  const mainDeck = decodeDeckSection(translator, 12, signedSuffix);
 
   // Decode sideboard (counts 1-3 only)
   // Version 1 codes don't have sideboard section, version 2+ do
   let sideboard: Deck = [];
   if (version >= 2) {
-    sideboard = decodeDeckSection(translator, 3);
+    sideboard = decodeDeckSection(translator, 3, signedSuffix);
   }
 
   return {

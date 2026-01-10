@@ -19,3 +19,7 @@ export interface SetVariantGroup {
 export interface CountGroup {
 	setVariantGroups: SetVariantGroup[];
 }
+
+export interface DecodeOptions {
+	signedSuffix?: "s" | "*";
+}

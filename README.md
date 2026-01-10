@@ -81,8 +81,10 @@ Variants are mapped as follows:
 | ------- | ------------------ | ------------ | --------------- |
 | 1       | 0                  | (none)       | Base variant    |
 | 1       | 1                  | a            | Alternate art A |
-| 1       | 2                  | s            | Signed          |
+| 1       | 2                  | s or \*      | Signed          |
 | 2       | 3                  | b            | Alternate art B |
+
+> **Note:** Both `s` and `*` are valid suffixes for signed cards (e.g., `OGN-007s` and `OGN-007*` are equivalent). When decoding, `s` is used by default. See [Decoding Options](#decoding-options) for customization.
 
 ## Installation
 
@@ -166,6 +168,23 @@ console.log("Main Deck:", decoded.mainDeck);
 
 console.log("Sideboard:", decoded.sideboard);
 // 8 cards: 2x OGN-022, 2x OGN-024, 2x OGN-093, 1x OGN-088, 1x OGN-114
+```
+
+### Decoding Options
+
+You can customize how signed cards are decoded by passing an options object:
+
+```typescript
+import { getDeckFromCode } from "@piltoverarchive/riftbound-deck-codes";
+import type { DecodeOptions } from "@piltoverarchive/riftbound-deck-codes";
+
+const code = "YOUR_DECK_CODE";
+
+// Default: signed cards use 's' suffix (e.g., OGN-007s)
+const defaultDecode = getDeckFromCode(code);
+
+// Use '*' suffix for signed cards (e.g., OGN-007*)
+const starDecode = getDeckFromCode(code, { signedSuffix: "*" });
 ```
 
 ### Important Notes

@@ -18,5 +18,6 @@ export const VARIANT_MAP: Record<string, number> = {
   "": 0, // Base variant (no suffix)
   a: 1,
   s: 2,
+  "*": 2, // Alternative signed notation
   b: 3,
 };
