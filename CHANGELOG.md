@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-10
+
+### Added
+
+- **Chosen Champion Support (Version 3)**: New optional `chosenChampion` parameter for `getCodeFromDeck()` and returned in `getDeckFromCode()`. The champion is a label referencing a card in the main deck.
+- **Alternative Signed Card Suffix**: Support `*` as an alternative to `s` for signed cards (e.g., `OGN-007*` is equivalent to `OGN-007s`)
+- **Decode Options**: New `signedSuffix` option in `getDeckFromCode()` to control whether signed cards decode with `s` or `*` suffix
+
+### Changed
+
+- Deck codes now encode as Version 3 by default
+- `DeckWithSideboard` type now includes optional `chosenChampion?: string` field
+
+### Compatibility
+
+- ✅ Can decode Version 1 and 2 codes (returns `chosenChampion: undefined`)
+- ❌ Version 3 codes require updated library (older libraries will reject v3 codes)
+
+---
+
 ## [1.0.0] - 2025
 
 ### Added
@@ -38,9 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History Summary
 
-| Version | Date | Key Changes                                          |
-| ------- | ---- | ---------------------------------------------------- |
-| 1.0.0   | 2025 | Initial release with Version 1 and Version 2 support |
+| Version | Date       | Key Changes                                              |
+| ------- | ---------- | -------------------------------------------------------- |
+| 1.1.0   | 2026-01-10 | Chosen champion support, alternative signed card suffix  |
+| 1.0.0   | 2025       | Initial release with Version 1 and Version 2 support     |
 
 ---
 
