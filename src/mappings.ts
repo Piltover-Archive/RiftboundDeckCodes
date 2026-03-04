@@ -7,6 +7,7 @@ export const SET_MAP: Record<string, number> = {
   OGS: 1,
   ARC: 2,
   SFD: 3,
+  UNL: 4,
 };
 
 /**

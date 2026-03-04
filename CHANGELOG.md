@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-03-04
+
+### Added
+
+- **Rune Card Support (Version 4)**: Card codes with `R` prefix (e.g., `SFD-R02`, `UNL-R05a`) are now parsed, encoded, and decoded correctly. Rune numbers are 2-digit (`R01`–`R06`).
+- **UNL Set**: Added `UNL` (id `4`) to the set map.
+
+### Changed
+
+- Deck codes now encode as Version 4 by default
+- `parseCardCode()` regex updated to accept `R`-prefixed card numbers
+- Binary format uses a flag byte (`0x00` normal, `0x01` rune) before each card number varint
+
+### Compatibility
+
+- ✅ Can decode Version 1, 2, and 3 codes (no rune cards in those versions)
+- ❌ Version 4 codes require updated library (older libraries will reject v4 codes)
+
+---
+
 ## [1.1.0] - 2026-01-10
 
 ### Added
@@ -60,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date       | Key Changes                                              |
 | ------- | ---------- | -------------------------------------------------------- |
+| 1.2.0   | 2026-03-04 | Rune card support (R## format), UNL set                  |
 | 1.1.0   | 2026-01-10 | Chosen champion support, alternative signed card suffix  |
 | 1.0.0   | 2025       | Initial release with Version 1 and Version 2 support     |
 

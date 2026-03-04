@@ -9,7 +9,7 @@ import type {
 import VarintTranslator from "./VarintTranslator";
 
 const FORMAT = 1;
-const VERSION = 3;
+const VERSION = 4;
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 /**
@@ -90,7 +90,7 @@ function parseCardCode(cardCode: string): {
     );
   }
 
-  const match = rest.match(/^(\d+)([a-z*]?)$/);
+  const match = rest.match(/^(R?\d+)([a-z*]?)$/);
   if (!match) {
     throw new Error(
       `Invalid card code format: ${cardCode}. Expected format: SET-NUMBERvariant`
@@ -160,7 +160,11 @@ function groupBySetAndVariant(cards: Card[]): SetVariantGroup[] {
  * @param deck - The deck to encode
  * @param maxCount - Maximum count to process (12 for main deck, 3 for sideboard)
  */
-function encodeDeckSection(deck: Deck, maxCount: number = 12): number[] {
+function encodeDeckSection(
+  deck: Deck,
+  maxCount: number = 12,
+  version: number = 4
+): number[] {
   const bytes: number[] = [];
 
   // Process counts from maxCount down to 1
@@ -179,7 +183,19 @@ function encodeDeckSection(deck: Deck, maxCount: number = 12): number[] {
 
       // Write card numbers
       for (const cardNumber of group.cardNumbers) {
-        bytes.push(...VarintTranslator.GetVarint(parseInt(cardNumber)));
+        if (version >= 4) {
+          if (cardNumber.startsWith("R")) {
+            bytes.push(0x01); // Rune flag
+            bytes.push(
+              ...VarintTranslator.GetVarint(parseInt(cardNumber.slice(1)))
+            );
+          } else {
+            bytes.push(0x00); // Normal card flag
+            bytes.push(...VarintTranslator.GetVarint(parseInt(cardNumber)));
+          }
+        } else {
+          bytes.push(...VarintTranslator.GetVarint(parseInt(cardNumber)));
+        }
       }
     }
   }
@@ -196,7 +212,8 @@ function encodeDeckSection(deck: Deck, maxCount: number = 12): number[] {
 function decodeDeckSection(
   translator: VarintTranslator,
   maxCount: number = 12,
-  signedSuffix: "s" | "*" = "s"
+  signedSuffix: "s" | "*" = "s",
+  version: number = 4
 ): Deck {
   const deck: Deck = [];
 
@@ -229,12 +246,25 @@ function decodeDeckSection(
       }
 
       for (let j = 0; j < numCards; j++) {
-        const cardNumber = translator.PopVarint();
+        let cardNumberStr: string;
+
+        if (version >= 4) {
+          const isRune = translator.get(0);
+          translator.sliceAndSet(1);
+          const num = translator.PopVarint();
+
+          if (isRune === 0x01) {
+            cardNumberStr = `R${num.toString().padStart(2, "0")}`;
+          } else {
+            cardNumberStr = num.toString().padStart(3, "0");
+          }
+        } else {
+          const num = translator.PopVarint();
+          cardNumberStr = num.toString().padStart(3, "0");
+        }
 
         deck.push({
-          cardCode: `${setCode}-${cardNumber.toString().padStart(3, "0")}${
-            variantCode || ""
-          }`,
+          cardCode: `${setCode}-${cardNumberStr}${variantCode || ""}`,
           count,
         });
       }
@@ -257,16 +287,27 @@ export function getCodeFromDeck(
   sideboard: Deck = [],
   chosenChampion?: string
 ): string {
+  // Determine if any card has an R-prefix number
+  const hasRuneCode = (code: string) => {
+    const { number } = parseCardCode(code);
+    return number.startsWith("R");
+  };
+  const needsV4 =
+    mainDeck.some((c) => hasRuneCode(c.cardCode)) ||
+    sideboard.some((c) => hasRuneCode(c.cardCode)) ||
+    (chosenChampion !== undefined && hasRuneCode(chosenChampion));
+  const version = needsV4 ? 4 : 3;
+
   const bytes: number[] = [];
 
-  // Write format and version (always version 3)
-  bytes.push((FORMAT << 4) | VERSION);
+  // Write format and version
+  bytes.push((FORMAT << 4) | version);
 
   // Encode main deck (counts 1-12)
-  bytes.push(...encodeDeckSection(mainDeck, 12));
+  bytes.push(...encodeDeckSection(mainDeck, 12, version));
 
   // Encode sideboard (counts 1-3 only, since sideboards can't have runes/battlefields)
-  bytes.push(...encodeDeckSection(sideboard, 3));
+  bytes.push(...encodeDeckSection(sideboard, 3, version));
 
   // Encode chosen champion (version 3+)
   if (chosenChampion) {
@@ -286,7 +327,15 @@ export function getCodeFromDeck(
     bytes.push(0x01); // Champion present flag
     bytes.push(setValue);
     bytes.push(variantValue);
-    bytes.push(...VarintTranslator.GetVarint(parseInt(number)));
+    if (version >= 4 && number.startsWith("R")) {
+      bytes.push(0x01); // Rune flag
+      bytes.push(...VarintTranslator.GetVarint(parseInt(number.slice(1))));
+    } else if (version >= 4) {
+      bytes.push(0x00); // Normal card flag
+      bytes.push(...VarintTranslator.GetVarint(parseInt(number)));
+    } else {
+      bytes.push(...VarintTranslator.GetVarint(parseInt(number)));
+    }
   } else {
     bytes.push(0x00); // No champion flag
   }
@@ -329,13 +378,13 @@ export function getDeckFromCode(
   }
 
   // Decode main deck (counts 1-12)
-  const mainDeck = decodeDeckSection(translator, 12, signedSuffix);
+  const mainDeck = decodeDeckSection(translator, 12, signedSuffix, version);
 
   // Decode sideboard (counts 1-3 only)
   // Version 1 codes don't have sideboard section, version 2+ do
   let sideboard: Deck = [];
   if (version >= 2) {
-    sideboard = decodeDeckSection(translator, 3, signedSuffix);
+    sideboard = decodeDeckSection(translator, 3, signedSuffix, version);
   }
 
   // Decode chosen champion (version 3+ only)
@@ -348,7 +397,21 @@ export function getDeckFromCode(
       const set = translator.get(0);
       const variant = translator.get(1);
       translator.sliceAndSet(2);
-      const cardNumber = translator.PopVarint();
+
+      let cardNumberStr: string;
+      if (version >= 4) {
+        const isRune = translator.get(0);
+        translator.sliceAndSet(1);
+        const num = translator.PopVarint();
+        if (isRune === 0x01) {
+          cardNumberStr = `R${num.toString().padStart(2, "0")}`;
+        } else {
+          cardNumberStr = num.toString().padStart(3, "0");
+        }
+      } else {
+        const num = translator.PopVarint();
+        cardNumberStr = num.toString().padStart(3, "0");
+      }
 
       const setCode = Object.entries(SET_MAP).find(
         ([_, value]) => value === set
@@ -368,7 +431,7 @@ export function getDeckFromCode(
         )?.[0];
       }
 
-      chosenChampion = `${setCode}-${cardNumber.toString().padStart(3, "0")}${variantCode || ""}`;
+      chosenChampion = `${setCode}-${cardNumberStr}${variantCode || ""}`;
     }
   }
 
