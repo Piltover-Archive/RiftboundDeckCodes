@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-01
+
+### Added
+
+- **VEN Set**: Added `VEN` (id `5`) to the set map for Vendetta.
+- **RAD Set**: Added `RAD` (id `6`) to the set map for Radiance.
+- **Set Model Regression Test**: Added package-level coverage for set IDs and public API round-tripping.
+
+### Compatibility
+
+- No deck-code format version change.
+- Existing deck codes remain stable because the new set IDs are appended after `UNL: 4`.
+
+---
+
 ## [1.2.0] - 2026-03-04
 
 ### Added
@@ -14,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Deck codes now encode as Version 4 by default
+- Decks containing `R`-prefixed rune card numbers now encode as Version 4
 - `parseCardCode()` regex updated to accept `R`-prefixed card numbers
 - Binary format uses a flag byte (`0x00` normal, `0x01` rune) before each card number varint
 
@@ -80,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date       | Key Changes                                              |
 | ------- | ---------- | -------------------------------------------------------- |
+| 1.3.0   | 2026-07-01 | VEN and RAD set identifiers, set model regression test   |
 | 1.2.0   | 2026-03-04 | Rune card support (R## format), UNL set                  |
 | 1.1.0   | 2026-01-10 | Chosen champion support, alternative signed card suffix  |
 | 1.0.0   | 2025       | Initial release with Version 1 and Version 2 support     |

@@ -37,7 +37,8 @@ All encodings begin with 4 bits for format and 4 bits for version.
 | ------ | ------- | ----------------- | ------------------------------------------------------------------------- |
 | 1      | 1       | April 1, 2025     | Initial release. Supports main deck encoding.                             |
 | 1      | 2       | November 20, 2025 | Adds sideboard support.                                                   |
-| 1      | 3       | January 10, 2026  | Adds chosen champion support. All new codes encode as V3.                 |
+| 1      | 3       | January 10, 2026  | Adds chosen champion support.                                             |
+| 1      | 4       | March 4, 2026     | Adds rune-card support with a normal/rune flag before each card number.   |
 
 The list of cards are then encoded according to the following scheme:
 
@@ -61,18 +62,22 @@ The list of cards are then encoded according to the following scheme:
    - [repeat for the groups of eleven copies of a card]
    - [repeat down to groups of a single copy of a card]
 5. For Version 2 decks, the sideboard is encoded using the same scheme after the main deck, but **only processes counts 3, 2, and 1** (since sideboards cannot contain runes which may have higher counts). This optimization reduces sideboard encoding size by ~12%.
-6. The resulting byte array is base32 encoded into a string.
+6. For Version 4 decks, each card number is preceded by a flag byte: `0x00` for a normal card number or `0x01` for an `R`-prefixed rune number.
+7. The resulting byte array is base32 encoded into a string.
 
 ### Set Identifiers
 
 Sets are mapped as follows:
 
-| Version | Integer Identifier | Set Code | Set Name        |
-| ------- | ------------------ | -------- | --------------- |
-| 1       | 0                  | OGN      | Origins         |
-| 1       | 1                  | OGS      | Proving Grounds |
-| 2       | 2                  | ARC      | Arcane Box Set  |
-| 2       | 3                  | SFD      | Spiritforged    |
+| Integer Identifier | Set Code | Set Name        |
+| ------------------ | -------- | --------------- |
+| 0                  | OGN      | Origins         |
+| 1                  | OGS      | Proving Grounds |
+| 2                  | ARC      | Arcane Box Set  |
+| 3                  | SFD      | Spiritforged    |
+| 4                  | UNL      | Unleashed       |
+| 5                  | VEN      | Vendetta        |
+| 6                  | RAD      | Radiance        |
 
 ### Variant Identifiers
 
@@ -196,8 +201,8 @@ const starDecode = getDeckFromCode(code, { signedSuffix: "*" });
 
 - **No Game Rule Validation**: This library only encodes/decodes deck data. It does not validate Riftbound game rules (card limits, sideboard size, etc.). Validation should be done in your application.
 - **Card Counts**: Main deck supports counts 1-12 (for runes and standard cards). Sideboard only supports counts 1-3 (optimized for regular cards only).
-- **Always Version 3**: All new deck codes encode as Version 3. The chosen champion section adds 1 byte (no champion) or 4-5 bytes (with champion).
-- **Backward Compatibility**: Can decode Version 1/2 codes which return `chosenChampion: undefined`.
+- **Format Versions**: New non-rune deck codes encode as Version 3. Decks containing `R`-prefixed rune card numbers encode as Version 4.
+- **Backward Compatibility**: Can decode Version 1, 2, 3, and 4 codes. Version 1 and 2 codes return `chosenChampion: undefined`.
 
 ## Implementations
 
@@ -207,7 +212,7 @@ The TypeScript implementation in this repository is the reference implementation
 
 | Name               | Language   | Version\* | Maintainer      |
 | ------------------ | ---------- | --------- | --------------- |
-| RiftboundDeckCodes | TypeScript | 3         | PiltoverArchive |
+| RiftboundDeckCodes | TypeScript | 4         | PiltoverArchive |
 
 \*Version refers to the MAX_KNOWN_VERSION supported by the implementation.
 
