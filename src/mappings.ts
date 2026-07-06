@@ -8,6 +8,8 @@ export const SET_MAP: Record<string, number> = {
   ARC: 2,
   SFD: 3,
   UNL: 4,
+  VEN: 5,
+  RAD: 6,
 };
 
 /**
