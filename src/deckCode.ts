@@ -9,7 +9,7 @@ import type {
 import VarintTranslator from "./VarintTranslator";
 
 const FORMAT = 1;
-const VERSION = 4;
+const VERSION = 5;
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 /**
@@ -90,7 +90,7 @@ function parseCardCode(cardCode: string): {
     );
   }
 
-  const match = rest.match(/^(R?\d+)([a-z*]?)$/);
+  const match = rest.match(/^((?:R|SP)?\d+)([a-z*]?)$/);
   if (!match) {
     throw new Error(
       `Invalid card code format: ${cardCode}. Expected format: SET-NUMBERvariant`
@@ -275,6 +275,156 @@ function decodeDeckSection(
 }
 
 /**
+ * Encodes a deck section using the Version 5 "sparse" scheme.
+ *
+ * Instead of walking every count from a fixed maximum down to 1 (v1-v4), v5
+ * lists only the copy-counts that actually occur, high to low. This lets a
+ * single card have an arbitrarily high copy count (e.g. "Spiderling") without
+ * the leading/gap zero bytes the fixed-walk scheme would emit. Layout:
+ *
+ *   [numDistinctCounts]
+ *     per count (high -> low):
+ *       [count] [numGroups]
+ *         per set/variant group: [numCards] [set] [variant]
+ *           per card: when `flagged`, a prefix flag byte
+ *             (0x00 normal | 0x01 rune | 0x02 special) precedes the card
+ *             number varint; when not `flagged`, the bare card number varint.
+ *
+ * `flagged` mirrors the deck-level prefix bit written by the caller
+ * (getCodeFromDeck): it is true only when the deck contains an R/SP card, so
+ * all-normal decks omit the per-card flag byte entirely.
+ */
+function encodeDeckSectionSparse(deck: Deck, flagged: boolean): number[] {
+  const bytes: number[] = [];
+
+  // Distinct copy-counts present in this section, processed high -> low.
+  const counts = Array.from(
+    new Set(deck.filter((card) => card.count >= 1).map((card) => card.count))
+  ).sort((a, b) => b - a);
+
+  bytes.push(...VarintTranslator.GetVarint(counts.length));
+
+  for (const count of counts) {
+    bytes.push(...VarintTranslator.GetVarint(count));
+
+    const cards = deck.filter((card) => card.count === count);
+    const setVariantGroups = groupBySetAndVariant(cards);
+
+    bytes.push(...VarintTranslator.GetVarint(setVariantGroups.length));
+
+    for (const group of setVariantGroups) {
+      bytes.push(...VarintTranslator.GetVarint(group.cardNumbers.length));
+      bytes.push(group.set);
+      bytes.push(group.variant);
+
+      for (const cardNumber of group.cardNumbers) {
+        if (!flagged) {
+          // All-normal deck: no prefix flag byte, bare card-number varint.
+          bytes.push(...VarintTranslator.GetVarint(parseInt(cardNumber)));
+        } else if (cardNumber.startsWith("SP")) {
+          bytes.push(0x02); // Special flag
+          bytes.push(
+            ...VarintTranslator.GetVarint(parseInt(cardNumber.slice(2)))
+          );
+        } else if (cardNumber.startsWith("R")) {
+          bytes.push(0x01); // Rune flag
+          bytes.push(
+            ...VarintTranslator.GetVarint(parseInt(cardNumber.slice(1)))
+          );
+        } else {
+          bytes.push(0x00); // Normal card flag
+          bytes.push(...VarintTranslator.GetVarint(parseInt(cardNumber)));
+        }
+      }
+    }
+  }
+
+  return bytes;
+}
+
+/**
+ * Decodes a deck section written with the Version 5 "sparse" scheme.
+ * @param translator - The varint translator
+ * @param signedSuffix - The suffix to use for signed cards ('s' or '*')
+ */
+function decodeDeckSectionSparse(
+  translator: VarintTranslator,
+  signedSuffix: "s" | "*" = "s",
+  flagged: boolean = true
+): Deck {
+  const deck: Deck = [];
+
+  const numCounts = translator.PopVarint();
+
+  for (let i = 0; i < numCounts; i++) {
+    const count = translator.PopVarint();
+    const numGroups = translator.PopVarint();
+
+    for (let g = 0; g < numGroups; g++) {
+      const numCards = translator.PopVarint();
+      const set = translator.get(0);
+      const variant = translator.get(1);
+      translator.sliceAndSet(2);
+
+      const setCode = Object.entries(SET_MAP).find(
+        ([_, value]) => value === set
+      )?.[0];
+
+      // For signed cards (variant 2), use the signedSuffix option
+      let variantCode: string | undefined;
+      if (variant === 2) {
+        variantCode = signedSuffix;
+      } else {
+        variantCode = Object.entries(VARIANT_MAP).find(
+          ([_, value]) => value === variant
+        )?.[0];
+      }
+
+      if (!setCode) {
+        throw new Error(`Unknown set code: ${set}`);
+      }
+
+      for (let j = 0; j < numCards; j++) {
+        let cardNumberStr: string;
+        if (!flagged) {
+          // All-normal deck: no prefix flag byte precedes the card number.
+          const num = translator.PopVarint();
+          cardNumberStr = num.toString().padStart(3, "0");
+          deck.push({
+            cardCode: `${setCode}-${cardNumberStr}${variantCode || ""}`,
+            count,
+          });
+          continue;
+        }
+
+        const prefixFlag = translator.get(0);
+        translator.sliceAndSet(1);
+        const num = translator.PopVarint();
+
+        if (prefixFlag === 0x02) {
+          cardNumberStr = `SP${num}`; // special: unpadded, variable width
+        } else if (prefixFlag === 0x01) {
+          cardNumberStr = `R${num.toString().padStart(2, "0")}`;
+        } else if (prefixFlag === 0x00) {
+          cardNumberStr = num.toString().padStart(3, "0");
+        } else {
+          // Fail loudly on an unrecognised prefix rather than silently
+          // mis-decoding it as a normal card.
+          throw new Error(`Unknown number-prefix flag: ${prefixFlag}`);
+        }
+
+        deck.push({
+          cardCode: `${setCode}-${cardNumberStr}${variantCode || ""}`,
+          count,
+        });
+      }
+    }
+  }
+
+  return deck;
+}
+
+/**
  * Encodes a Riftbound deck into a shareable deck code
  * @param mainDeck - The main deck cards
  * @param sideboard - Optional sideboard cards (defaults to empty array)
@@ -287,27 +437,74 @@ export function getCodeFromDeck(
   sideboard: Deck = [],
   chosenChampion?: string
 ): string {
-  // Determine if any card has an R-prefix number
+  // Reject malformed counts before any varint processing: a non-integer,
+  // zero, negative, or unsafe count would otherwise be silently truncated or
+  // wrapped by the bitwise varint encoder into a wrong (but valid-looking) code.
+  for (const card of [...mainDeck, ...sideboard]) {
+    if (!Number.isSafeInteger(card.count) || card.count < 1) {
+      throw new Error(
+        `Invalid card count for ${card.cardCode}: ${card.count}. Count must be a positive integer.`
+      );
+    }
+  }
+
+  // Number-prefix axis: a per-card flag byte distinguishes normal (0x00),
+  // rune "R" (0x01), and special "SP" (0x02) numbers. R and SP are disjoint
+  // prefixes, so these checks never overlap.
   const hasRuneCode = (code: string) => {
     const { number } = parseCardCode(code);
     return number.startsWith("R");
+  };
+  const hasSpecialCode = (code: string) => {
+    const { number } = parseCardCode(code);
+    return number.startsWith("SP");
   };
   const needsV4 =
     mainDeck.some((c) => hasRuneCode(c.cardCode)) ||
     sideboard.some((c) => hasRuneCode(c.cardCode)) ||
     (chosenChampion !== undefined && hasRuneCode(chosenChampion));
-  const version = needsV4 ? 4 : 3;
+
+  // Two independent triggers require the v5 sparse scheme:
+  //  - a card exceeds the v1-v4 count ceilings (e.g. "Spiderling", any number
+  //    of copies), or
+  //  - a card uses the "SP" (special) number prefix, whose 0x02 flag older
+  //    decoders would silently mis-read as a normal card.
+  // Everything else keeps emitting v3/v4, byte-identical to prior releases.
+  const maxMain = mainDeck.reduce((m, c) => Math.max(m, c.count), 0);
+  const maxSide = sideboard.reduce((m, c) => Math.max(m, c.count), 0);
+  const needsV5 = maxMain > 12 || maxSide > 3;
+  const anySpecial =
+    mainDeck.some((c) => hasSpecialCode(c.cardCode)) ||
+    sideboard.some((c) => hasSpecialCode(c.cardCode)) ||
+    (chosenChampion !== undefined && hasSpecialCode(chosenChampion));
+
+  const version = needsV5 || anySpecial ? 5 : needsV4 ? 4 : 3;
+
+  // Only decks that actually contain an R/SP card need the per-card prefix
+  // flag byte. `flagged` is true exactly when some card carries a prefix; an
+  // all-normal deck (e.g. a high-copy Spiderling deck) sets it false and
+  // encodes bare card numbers, saving a byte per card. For v5 this is written
+  // as an explicit deck-level bit; for v3/v4 it is implied by the version
+  // (v4 always flags, v3 never does), so those codes are unaffected.
+  const flagged = needsV4 || anySpecial;
 
   const bytes: number[] = [];
 
   // Write format and version
   bytes.push((FORMAT << 4) | version);
 
-  // Encode main deck (counts 1-12)
-  bytes.push(...encodeDeckSection(mainDeck, 12, version));
+  if (version >= 5) {
+    // v5: one deck-level prefix bit, then sparse main + sideboard sections.
+    bytes.push(flagged ? 1 : 0);
+    bytes.push(...encodeDeckSectionSparse(mainDeck, flagged));
+    bytes.push(...encodeDeckSectionSparse(sideboard, flagged));
+  } else {
+    // Encode main deck (counts 1-12)
+    bytes.push(...encodeDeckSection(mainDeck, 12, version));
 
-  // Encode sideboard (counts 1-3 only, since sideboards can't have runes/battlefields)
-  bytes.push(...encodeDeckSection(sideboard, 3, version));
+    // Encode sideboard (counts 1-3 only, since sideboards can't have runes/battlefields)
+    bytes.push(...encodeDeckSection(sideboard, 3, version));
+  }
 
   // Encode chosen champion (version 3+)
   if (chosenChampion) {
@@ -327,10 +524,13 @@ export function getCodeFromDeck(
     bytes.push(0x01); // Champion present flag
     bytes.push(setValue);
     bytes.push(variantValue);
-    if (version >= 4 && number.startsWith("R")) {
+    if (flagged && number.startsWith("SP")) {
+      bytes.push(0x02); // Special flag
+      bytes.push(...VarintTranslator.GetVarint(parseInt(number.slice(2))));
+    } else if (flagged && number.startsWith("R")) {
       bytes.push(0x01); // Rune flag
       bytes.push(...VarintTranslator.GetVarint(parseInt(number.slice(1))));
-    } else if (version >= 4) {
+    } else if (flagged) {
       bytes.push(0x00); // Normal card flag
       bytes.push(...VarintTranslator.GetVarint(parseInt(number)));
     } else {
@@ -377,14 +577,37 @@ export function getDeckFromCode(
     );
   }
 
-  // Decode main deck (counts 1-12)
-  const mainDeck = decodeDeckSection(translator, 12, signedSuffix, version);
+  // For v5, a deck-level prefix bit follows the version byte and selects whether
+  // card numbers carry a per-card flag. For v3/v4 the convention is implied by
+  // the version (v4 flags, v3 does not).
+  let flagged: boolean;
+  if (version >= 5) {
+    const prefixFlag = translator.get(0);
+    translator.sliceAndSet(1);
+    if (prefixFlag > 1) {
+      throw new Error(`Unsupported deck prefix flag: ${prefixFlag}`);
+    }
+    flagged = prefixFlag === 1;
+  } else {
+    flagged = version >= 4;
+  }
 
-  // Decode sideboard (counts 1-3 only)
-  // Version 1 codes don't have sideboard section, version 2+ do
+  let mainDeck: Deck;
   let sideboard: Deck = [];
-  if (version >= 2) {
-    sideboard = decodeDeckSection(translator, 3, signedSuffix, version);
+
+  if (version >= 5) {
+    // v5: sparse scheme (both main deck and sideboard)
+    mainDeck = decodeDeckSectionSparse(translator, signedSuffix, flagged);
+    sideboard = decodeDeckSectionSparse(translator, signedSuffix, flagged);
+  } else {
+    // Decode main deck (counts 1-12)
+    mainDeck = decodeDeckSection(translator, 12, signedSuffix, version);
+
+    // Decode sideboard (counts 1-3 only)
+    // Version 1 codes don't have sideboard section, version 2+ do
+    if (version >= 2) {
+      sideboard = decodeDeckSection(translator, 3, signedSuffix, version);
+    }
   }
 
   // Decode chosen champion (version 3+ only)
@@ -399,14 +622,20 @@ export function getDeckFromCode(
       translator.sliceAndSet(2);
 
       let cardNumberStr: string;
-      if (version >= 4) {
-        const isRune = translator.get(0);
+      if (flagged) {
+        const prefixFlag = translator.get(0);
         translator.sliceAndSet(1);
         const num = translator.PopVarint();
-        if (isRune === 0x01) {
+        if (prefixFlag === 0x02) {
+          cardNumberStr = `SP${num}`; // special: unpadded, variable width
+        } else if (prefixFlag === 0x01) {
           cardNumberStr = `R${num.toString().padStart(2, "0")}`;
-        } else {
+        } else if (prefixFlag === 0x00) {
           cardNumberStr = num.toString().padStart(3, "0");
+        } else {
+          throw new Error(
+            `Unknown number-prefix flag in champion: ${prefixFlag}`
+          );
         }
       } else {
         const num = translator.PopVarint();

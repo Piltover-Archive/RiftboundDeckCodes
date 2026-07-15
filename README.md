@@ -16,13 +16,23 @@ These strings can be used to share decks across Riftbound TCG applications and t
 
 ## Cards & Decks
 
-Every Riftbound TCG card has a corresponding card code. Card codes are comprised of a three-character set identifier, a three-digit card number, and an optional single-character variant suffix.
+Every Riftbound TCG card has a corresponding card code. Card codes are comprised of a three-character set identifier, a card number with an optional prefix (`R` for runes, `SP` for special cards), and an optional single-character variant suffix.
 
 ```
 OGN-007a
 │   │  └ variant - a
 │   └ card number - 007
 └ set - OGN
+```
+
+The card number may carry an optional prefix on its own axis (independent of the variant suffix):
+
+```
+VEN-SP1a
+│   │ │└ variant - a
+│   │ └ card number - 1
+│   └ number prefix - SP (special)
+└ set - VEN
 ```
 
 The deck code library accepts a Riftbound deck as a list of `Card` objects. This is simply the card code and an associated integer for the number of occurrences of the card in the deck.
@@ -39,6 +49,7 @@ All encodings begin with 4 bits for format and 4 bits for version.
 | 1      | 2       | November 20, 2025 | Adds sideboard support.                                                   |
 | 1      | 3       | January 10, 2026  | Adds chosen champion support.                                             |
 | 1      | 4       | March 4, 2026     | Adds rune-card support with a normal/rune flag before each card number.   |
+| 1      | 5       | July 15, 2026     | Adds high copy-count support (a single card may exceed the v1–4 count ceilings of main 12 / sideboard 3, via a sparse count encoding), `SP` special-card number-prefix support (flag byte `0x02`), and a deck-level prefix bit so all-normal decks omit per-card flag bytes. |
 
 The list of cards are then encoded according to the following scheme:
 
@@ -65,6 +76,30 @@ The list of cards are then encoded according to the following scheme:
 6. For Version 4 decks, each card number is preceded by a flag byte: `0x00` for a normal card number or `0x01` for an `R`-prefixed rune number.
 7. The resulting byte array is base32 encoded into a string.
 
+#### Version 5: high copy counts (sparse encoding)
+
+The v1–4 scheme walks _every_ count from a fixed maximum (12 main, 3 sideboard) down to 1, so a card cannot have more copies than that maximum. Some cards (e.g. **Spiderling**, whose rules text is _"Your deck can have any number of cards named Spiderling"_) may legally appear far more often. A deck is encoded as **Version 5** whenever any single card exceeds those ceilings (`> 12` copies in the main deck or `> 3` in the sideboard), or contains an `SP` special card; otherwise it still encodes as Version 3 or 4, byte-for-byte identical to earlier releases.
+
+A Version 5 code begins with a single **deck-level prefix bit** (one byte) immediately after the format/version byte:
+
+- `0` — the deck contains **no** `R` or `SP` cards, so card numbers are written **without** the per-card flag byte (a bare varint each). This is the common high-copy case (e.g. a Spiderling deck of ordinary cards) and avoids paying a flag byte on every card.
+- `1` — the deck contains at least one `R`/`SP` card, so **every** card number is preceded by its flag byte (`0x00`/`0x01`/`0x02`), exactly as in Version 4.
+
+Then, rather than walking a fixed count range, each Version 5 section writes only the copy-counts that actually occur, ordered most-copies first:
+
+- [how many distinct copy-counts occur in this section]
+  - [copy-count]
+  - [how many set/variant lists have this copy-count]
+    - [how many cards within this set/variant combination follow]
+    - [set]
+    - [variant]
+      - [flag byte, only if the deck prefix bit is `1`] [card number]
+      - [flag byte, only if the deck prefix bit is `1`] [card number]
+      - ...
+  - [repeat for the next copy-count, descending]
+
+Set/variant grouping and ordering are unchanged. The chosen champion follows the same prefix-bit convention. Because Version 5 is a new version number, libraries built before it reject v5 codes (see the version guard) rather than misreading them, and all Version 1–4 codes continue to decode unchanged.
+
 ### Set Identifiers
 
 Sets are mapped as follows:
@@ -78,6 +113,18 @@ Sets are mapped as follows:
 | 4                  | UNL      | Unleashed       |
 | 5                  | VEN      | Vendetta        |
 | 6                  | RAD      | Radiance        |
+
+### Number Prefix Identifiers
+
+The card number sits on its own axis (introduced in Version 4). A flag byte identifies its prefix; the digits are stored as a varint, and the prefix and its zero-padding width are reconstructed on decode. In **Version 4** the flag byte always precedes every card number. In **Version 5** it is present only when the deck-level prefix bit is `1` (i.e. the deck contains at least one `R`/`SP` card); all-normal v5 decks omit it entirely.
+
+| Flag byte | Prefix | Meaning | Number width on decode |
+| --------- | ------ | ------- | ---------------------- |
+| `0x00`    | (none) | Normal  | 3 (`001`)              |
+| `0x01`    | `R`    | Rune    | 2 (`R01`)              |
+| `0x02`    | `SP`   | Special | unpadded (`SP1`)       |
+
+> **Note:** The prefix is independent of the variant suffix, so `VEN-SP1a` (special number `1`, variant `a`) is valid. Prefixes are uppercase only (`R`, `SP`). Special numbers are variable-width, so `VEN-SP01` normalises to `VEN-SP1` on round-trip. The `SP` flag was added in Version 5; a deck containing any `SP` card encodes as Version 5.
 
 ### Variant Identifiers
 
@@ -200,9 +247,9 @@ const starDecode = getDeckFromCode(code, { signedSuffix: "*" });
 ### Important Notes
 
 - **No Game Rule Validation**: This library only encodes/decodes deck data. It does not validate Riftbound game rules (card limits, sideboard size, etc.). Validation should be done in your application.
-- **Card Counts**: Main deck supports counts 1-12 (for runes and standard cards). Sideboard only supports counts 1-3 (optimized for regular cards only).
-- **Format Versions**: New non-rune deck codes encode as Version 3. Decks containing `R`-prefixed rune card numbers encode as Version 4.
-- **Backward Compatibility**: Can decode Version 1, 2, 3, and 4 codes. Version 1 and 2 codes return `chosenChampion: undefined`.
+- **Card Counts**: In Versions 1–4, the main deck supports counts 1-12 and the sideboard 1-3. Version 5 lifts this ceiling for high-copy cards (e.g. Spiderling), supporting any number of copies of a single card. Counts must be positive integers; `getCodeFromDeck` throws on a zero, negative, or non-integer count.
+- **Format Versions**: New non-rune deck codes encode as Version 3. Decks containing `R`-prefixed rune card numbers encode as Version 4. Decks where a single card exceeds the count ceilings (`> 12` main / `> 3` sideboard), or that contain an `SP`-prefixed special card, encode as Version 5.
+- **Backward Compatibility**: Can decode Version 1, 2, 3, 4, and 5 codes. Version 1 and 2 codes return `chosenChampion: undefined`.
 
 ## Implementations
 
@@ -212,7 +259,7 @@ The TypeScript implementation in this repository is the reference implementation
 
 | Name               | Language   | Version\* | Maintainer      |
 | ------------------ | ---------- | --------- | --------------- |
-| RiftboundDeckCodes | TypeScript | 4         | PiltoverArchive |
+| RiftboundDeckCodes | TypeScript | 5         | PiltoverArchive |
 
 \*Version refers to the MAX_KNOWN_VERSION supported by the implementation.
 

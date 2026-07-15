@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-07-15
+
+### Added
+
+- **High Copy-Count Support (Version 5)**: A single card may now exceed the previous count ceilings (12 in the main deck, 3 in the sideboard). This supports cards such as **Spiderling** (`VEN-097`), whose rules text allows any number of copies. A deck is encoded as Version 5 only when a card actually exceeds those ceilings.
+- **Sparse count encoding**: Version 5 sections list only the copy-counts that actually occur (most copies first) instead of walking a fixed range, keeping high-copy codes compact.
+- **Deck-level prefix bit**: A Version 5 code carries one bit indicating whether the deck uses any `R`/`SP` card. All-normal decks (the common high-copy case, e.g. Spiderling) omit the per-card flag byte entirely, making those codes ~25% shorter (e.g. a 40-card Spiderling deck drops from 133 to 100 characters).
+- **`SP` Special-Card Prefix (Version 5)**: Card numbers may carry an `SP` (special) prefix, e.g. `VEN-SP1` / `VEN-SP1a`. `SP` is a third value (`0x02`) on the number-prefix flag byte, parallel to `R` (runes), independent of the variant suffix. Special numbers are variable-width (`SP1`, not `SP01`). Any deck containing an `SP` card encodes as Version 5.
+- **Loud rejection of unknown prefixes**: The Version 5 decoder now throws on an unrecognised number-prefix flag instead of silently treating it as a normal card, so future additions fail safe on older decoders.
+- **Test suite**: Added a `node:test` suite (`npm test`) with committed golden vectors locking backward compatibility and the v5 wire format (both high-copy and `SP` cases, cross-checked against an independent encoder).
+
+### Changed
+
+- Decks with a card above the count ceilings (`> 12` main / `> 3` sideboard) or containing an `SP` special card now encode as Version 5. All other decks continue to encode as Version 3 or 4, byte-for-byte identical to previous releases.
+
+### Compatibility
+
+- ✅ Can decode Version 1, 2, 3, and 4 codes — unchanged.
+- ✅ Decks that fit the v1–4 ceilings still encode to byte-identical strings (verified by golden vectors).
+- ❌ Version 5 codes require an updated library; older libraries reject them with an `Unsupported version` error rather than misreading them.
+
+---
+
 ## [1.3.0] - 2026-07-01
 
 ### Added
@@ -94,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date       | Key Changes                                              |
 | ------- | ---------- | -------------------------------------------------------- |
+| 1.4.0   | 2026-07-15 | High copy-count support (Version 5, sparse encoding)     |
 | 1.3.0   | 2026-07-01 | VEN and RAD set identifiers                              |
 | 1.2.0   | 2026-03-04 | Rune card support (R## format), UNL set                  |
 | 1.1.0   | 2026-01-10 | Chosen champion support, alternative signed card suffix  |
