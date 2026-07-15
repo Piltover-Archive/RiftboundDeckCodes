@@ -1,0 +1,502 @@
+[
+  {
+    "name": "v3-basic (no runes, no sideboard, no champion)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-004",
+          "count": 1
+        }
+      ],
+      "sideboard": []
+    },
+    "code": "CMAAAAAAAAAAAAAAAEAQAAAHAEAQAACZAEAQAAAEAAAAAAA",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-004",
+          "count": 1
+        }
+      ],
+      "sideboard": []
+    }
+  },
+  {
+    "name": "v3-sideboard (no runes, with sideboard, no champion)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 7
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 5
+        },
+        {
+          "cardCode": "OGN-012",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-039",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-088",
+          "count": 1
+        }
+      ]
+    },
+    "code": "CMAAAAAAAAAQCAAAA4AACAIAABMQAAIBAAAAYAIBAAACOAIBAAAA2AABAEAAAFQBAEAAAWAA",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 7
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 5
+        },
+        {
+          "cardCode": "OGN-012",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-039",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-088",
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "name": "v3-champion (no runes, with sideboard, with champion)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 7
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 5
+        },
+        {
+          "cardCode": "OGN-012",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-039",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-088",
+          "count": 1
+        }
+      ],
+      "chosenChampion": "OGN-012"
+    },
+    "code": "CMAAAAAAAAAQCAAAA4AACAIAABMQAAIBAAAAYAIBAAACOAIBAAAA2AABAEAAAFQBAEAAAWABAAAAY",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 7
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 5
+        },
+        {
+          "cardCode": "OGN-012",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-039",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-088",
+          "count": 1
+        }
+      ],
+      "chosenChampion": "OGN-012"
+    }
+  },
+  {
+    "name": "v4-runes (runes in main, sideboard, normal champion)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "SFD-R02",
+          "count": 3
+        },
+        {
+          "cardCode": "UNL-R05a",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-007",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        }
+      ],
+      "chosenChampion": "OGN-007"
+    },
+    "code": "CQAAAAAAAAAAAAAAAIAQAAAAA4AQGAABAIAQCBABAECQCAIAAAAFSAABAEAAAAAWAAAQAAAAA4",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 3
+        },
+        {
+          "cardCode": "SFD-R02",
+          "count": 3
+        },
+        {
+          "cardCode": "UNL-R05a",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        }
+      ],
+      "chosenChampion": "OGN-007"
+    }
+  },
+  {
+    "name": "v4-rune-champion (rune main + rune champion)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "SFD-R01",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-007",
+          "count": 3
+        }
+      ],
+      "sideboard": [],
+      "chosenChampion": "SFD-R01"
+    },
+    "code": "CQAAAAAAAAAAAAAAAEAQAAAAA4AQCAYAAEAQAAAAAAAQGAABAE",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 3
+        },
+        {
+          "cardCode": "SFD-R01",
+          "count": 2
+        }
+      ],
+      "sideboard": [],
+      "chosenChampion": "SFD-R01"
+    }
+  },
+  {
+    "name": "v3-large (README Kai'Sa deck, sideboard + champion)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 7
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 5
+        },
+        {
+          "cardCode": "OGN-004",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-009",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-012",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-027",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-029",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-087",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-095",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-096",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-103",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-104",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-116",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-039",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-122",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-248",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-247",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-280",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-288",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-292",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-024",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-093",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-088",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-114",
+          "count": 1
+        }
+      ],
+      "chosenChampion": "OGN-103"
+    },
+    "code": "CMAAAAAAAAAQCAAAA4AACAIAABMQAAILAAAAICIMDMOVOX3AM5UHIAIDAAACO6XYAEAQKAAABX3QDGACUABKIAQAAEBQAAAWDBOQCAQAABMHEAIAABTQ",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-007",
+          "count": 7
+        },
+        {
+          "cardCode": "OGN-089",
+          "count": 5
+        },
+        {
+          "cardCode": "OGN-004",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-009",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-012",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-027",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-029",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-087",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-095",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-096",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-103",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-104",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-116",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-039",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-122",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-248",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-247",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-280",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-288",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-292",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-024",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-093",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-088",
+          "count": 1
+        },
+        {
+          "cardCode": "OGN-114",
+          "count": 1
+        }
+      ],
+      "chosenChampion": "OGN-103"
+    }
+  }
+]

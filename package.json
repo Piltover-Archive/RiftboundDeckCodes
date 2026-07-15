@@ -1,6 +1,6 @@
 {
   "name": "@piltoverarchive/riftbound-deck-codes",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Encode and decode Riftbound TCG decks to/from shareable strings",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,7 +12,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "pretest": "npm run build",
+    "test": "node --test test/*.test.js",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
