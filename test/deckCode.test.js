@@ -451,4 +451,35 @@ test.describe("fail-loud decoding of unknown v5 tokens", () => {
     ]);
     assert.throws(() => getDeckFromCode(bad), /Unknown number-prefix flag/);
   });
+  test("an unknown champion prefix flag throws (distinct from per-card)", () => {
+    // v5, prefix bit = 1, empty main + sideboard sections, then a present
+    // champion (set 5, variant 0) whose prefix flag is an unsupported 0x03.
+    const bad = bytesToBase32([
+      (1 << 4) | 5, 0x01, 0x00, 0x00, 0x01, 5, 0, 0x03, 1,
+    ]);
+    assert.throws(
+      () => getDeckFromCode(bad),
+      /Unknown number-prefix flag in champion/
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Encode input validation — malformed counts are rejected, not silently wrapped.
+// ---------------------------------------------------------------------------
+test.describe("encode rejects invalid card counts", () => {
+  for (const bad of [0, -1, 2.5, NaN, Infinity]) {
+    test(`count ${bad} throws`, () => {
+      assert.throws(
+        () => getCodeFromDeck(oneCard("OGN-004", bad)),
+        /Count must be a positive integer/
+      );
+    });
+    test(`sideboard count ${bad} throws`, () => {
+      assert.throws(
+        () => getCodeFromDeck(oneCard("OGN-004", 1), oneCard("OGN-050", bad)),
+        /Count must be a positive integer/
+      );
+    });
+  }
 });

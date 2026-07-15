@@ -286,10 +286,13 @@ function decodeDeckSection(
  *     per count (high -> low):
  *       [count] [numGroups]
  *         per set/variant group: [numCards] [set] [variant]
- *           per card: [flag: 0x00 normal | 0x01 rune] [cardNumber]
+ *           per card: when `flagged`, a prefix flag byte
+ *             (0x00 normal | 0x01 rune | 0x02 special) precedes the card
+ *             number varint; when not `flagged`, the bare card number varint.
  *
- * v5 always uses the rune flag byte (it is >= 4), so runes need no special
- * versioning here.
+ * `flagged` mirrors the deck-level prefix bit written by the caller
+ * (getCodeFromDeck): it is true only when the deck contains an R/SP card, so
+ * all-normal decks omit the per-card flag byte entirely.
  */
 function encodeDeckSectionSparse(deck: Deck, flagged: boolean): number[] {
   const bytes: number[] = [];
@@ -434,6 +437,17 @@ export function getCodeFromDeck(
   sideboard: Deck = [],
   chosenChampion?: string
 ): string {
+  // Reject malformed counts before any varint processing: a non-integer,
+  // zero, negative, or unsafe count would otherwise be silently truncated or
+  // wrapped by the bitwise varint encoder into a wrong (but valid-looking) code.
+  for (const card of [...mainDeck, ...sideboard]) {
+    if (!Number.isSafeInteger(card.count) || card.count < 1) {
+      throw new Error(
+        `Invalid card count for ${card.cardCode}: ${card.count}. Count must be a positive integer.`
+      );
+    }
+  }
+
   // Number-prefix axis: a per-card flag byte distinguishes normal (0x00),
   // rune "R" (0x01), and special "SP" (0x02) numbers. R and SP are disjoint
   // prefixes, so these checks never overlap.

@@ -116,7 +116,7 @@ Sets are mapped as follows:
 
 ### Number Prefix Identifiers
 
-The card number sits on its own axis (introduced in Version 4). Each card number is preceded by a flag byte identifying its prefix; the digits are stored as a varint, and the prefix and its zero-padding width are reconstructed on decode.
+The card number sits on its own axis (introduced in Version 4). A flag byte identifies its prefix; the digits are stored as a varint, and the prefix and its zero-padding width are reconstructed on decode. In **Version 4** the flag byte always precedes every card number. In **Version 5** it is present only when the deck-level prefix bit is `1` (i.e. the deck contains at least one `R`/`SP` card); all-normal v5 decks omit it entirely.
 
 | Flag byte | Prefix | Meaning | Number width on decode |
 | --------- | ------ | ------- | ---------------------- |
@@ -247,7 +247,7 @@ const starDecode = getDeckFromCode(code, { signedSuffix: "*" });
 ### Important Notes
 
 - **No Game Rule Validation**: This library only encodes/decodes deck data. It does not validate Riftbound game rules (card limits, sideboard size, etc.). Validation should be done in your application.
-- **Card Counts**: In Versions 1–4, the main deck supports counts 1-12 and the sideboard 1-3. Version 5 lifts this ceiling for high-copy cards (e.g. Spiderling), supporting any number of copies of a single card.
+- **Card Counts**: In Versions 1–4, the main deck supports counts 1-12 and the sideboard 1-3. Version 5 lifts this ceiling for high-copy cards (e.g. Spiderling), supporting any number of copies of a single card. Counts must be positive integers; `getCodeFromDeck` throws on a zero, negative, or non-integer count.
 - **Format Versions**: New non-rune deck codes encode as Version 3. Decks containing `R`-prefixed rune card numbers encode as Version 4. Decks where a single card exceeds the count ceilings (`> 12` main / `> 3` sideboard), or that contain an `SP`-prefixed special card, encode as Version 5.
 - **Backward Compatibility**: Can decode Version 1, 2, 3, 4, and 5 codes. Version 1 and 2 codes return `chosenChampion: undefined`.
 
