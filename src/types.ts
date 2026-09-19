@@ -9,6 +9,12 @@ export interface DeckWithSideboard {
 	mainDeck: Deck;
 	sideboard: Deck;
 	chosenChampion?: string;
+	/**
+	 * Legends a deck brings *in addition* to its starting legend, outside the
+	 * main deck. Carried by format version 6+; `undefined` for v1-v5 codes,
+	 * which have no legends block at all. Order is preserved as given.
+	 */
+	additionalLegends?: string[];
 }
 
 export interface SetVariantGroup {

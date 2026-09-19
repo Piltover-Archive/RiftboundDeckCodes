@@ -65,9 +65,12 @@ When Riftbound releases new sets or variants, they need to be added to `src/mapp
 export const SET_MAP: Record<string, number> = {
 	OGN: 0,
 	OGS: 1,
-	SFD: 2,
-	ARC: 3,
-	NEW: 4,  // Add new set here with next available ID
+	ARC: 2,
+	SFD: 3,
+	UNL: 4,
+	VEN: 5,
+	RAD: 6,
+	NEW: 7,  // Add new set here with next available ID
 };
 ```
 
@@ -78,6 +81,7 @@ export const VARIANT_MAP: Record<string, number> = {
 	"": 0,
 	a: 1,
 	s: 2,
+	"*": 2, // Alternative signed notation — shares the id with `s`
 	b: 3,
 	c: 4,  // Add new variant here with next available ID
 };
@@ -97,31 +101,37 @@ We welcome implementations of RiftboundDeckCodes in other programming languages!
 
 ### Testing Compatibility
 
-Use these test cases to verify your implementation matches:
+The authoritative vectors live in `test/fixtures/` and are asserted byte-for-byte
+by `npm test`, so they cannot drift from the implementation:
 
-**Test Deck 1 (Version 1 - no sideboard):**
+- `golden.json` — Version 3 and 4 vectors, locked since the 1.3.0 build.
+- `golden-v6.json` — Version 6 vectors, with and without a chosen champion.
+
+Port them directly. Two worked examples:
+
+**Test Deck 1 (Version 3 — no runes, no sideboard, no champion):**
 ```
 Main Deck:
-- 3x OGN-095
-- 2x OGN-039a
-- 1x OGN-247
+- 3x OGN-007
+- 2x OGN-089
+- 1x OGN-004
 
-Expected Code: CEBQKAICAECQKCIBAEAQGBABAMEQ
+Expected Code: CMAAAAAAAAAAAAAAAEAQAAAHAEAQAACZAEAQAAAEAAAAAAA
 ```
 
-**Test Deck 2 (Version 2 - with sideboard):**
+**Test Deck 2 (Version 6 — additional legends):**
 ```
 Main Deck:
-- 3x OGN-095
-- 7x OGN-007
+- 3x OGN-004
+- 3x OGN-009
+- 1x OGN-013
 
-Sideboard:
-- 2x OGN-050
-- 3x OGS-022a
-- 2x OGN-100
-- 1x SFD-015b
+Additional Legends:
+- OGN-280
+- OGN-288
+- OGN-292
 
-Expected Code: CICQCAICAECQGBIKAQCACAYBAMCAWDAUDYAQ
+Expected Code: CYAAEAYBAIAAABAJAEAQCAAABUAAAAYAACMAEAAAUABAAAFEAI
 ```
 
 ## Reporting Issues

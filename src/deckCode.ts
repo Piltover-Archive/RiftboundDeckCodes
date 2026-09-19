@@ -9,7 +9,7 @@ import type {
 import VarintTranslator from "./VarintTranslator";
 
 const FORMAT = 1;
-const VERSION = 5;
+const VERSION = 6;
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 /**
@@ -425,17 +425,129 @@ function decodeDeckSectionSparse(
 }
 
 /**
+ * Encodes a single card reference: set, variant, then the card number.
+ *
+ * The number carries a prefix flag byte (0x00 normal | 0x01 rune | 0x02
+ * special) only when the deck is `flagged`, matching the per-card convention
+ * used inside the deck sections. Shared by the chosen-champion trailer (v3+)
+ * and the additional-legends block (v6+) so the two can never drift apart.
+ *
+ * @param cardCode - The card code to write (e.g. "OGN-103")
+ * @param flagged - Whether this deck writes per-card prefix flag bytes
+ * @param label - What this reference is, for error messages
+ */
+function encodeCardRef(
+  cardCode: string,
+  flagged: boolean,
+  label: string
+): number[] {
+  const { set, number, variant } = parseCardCode(cardCode);
+
+  const setValue = SET_MAP[set];
+  if (setValue === undefined) {
+    throw new Error(
+      `Unknown set in ${label}: ${set}. Valid sets: ${Object.keys(SET_MAP).join(", ")}`
+    );
+  }
+
+  const variantValue = VARIANT_MAP[variant];
+  if (variantValue === undefined) {
+    throw new Error(
+      `Unknown variant in ${label}: '${variant}'. Valid variants: ${Object.keys(VARIANT_MAP).join(", ")}`
+    );
+  }
+
+  const bytes: number[] = [setValue, variantValue];
+
+  if (flagged && number.startsWith("SP")) {
+    bytes.push(0x02); // Special flag
+    bytes.push(...VarintTranslator.GetVarint(parseInt(number.slice(2))));
+  } else if (flagged && number.startsWith("R")) {
+    bytes.push(0x01); // Rune flag
+    bytes.push(...VarintTranslator.GetVarint(parseInt(number.slice(1))));
+  } else if (flagged) {
+    bytes.push(0x00); // Normal card flag
+    bytes.push(...VarintTranslator.GetVarint(parseInt(number)));
+  } else {
+    bytes.push(...VarintTranslator.GetVarint(parseInt(number)));
+  }
+
+  return bytes;
+}
+
+/**
+ * Decodes a single card reference written by {@link encodeCardRef}.
+ *
+ * @param translator - The varint translator
+ * @param flagged - Whether this deck writes per-card prefix flag bytes
+ * @param signedSuffix - The suffix to use for signed cards ('s' or '*')
+ * @param label - What this reference is, for error messages
+ */
+function decodeCardRef(
+  translator: VarintTranslator,
+  flagged: boolean,
+  signedSuffix: "s" | "*",
+  label: string
+): string {
+  const set = translator.get(0);
+  const variant = translator.get(1);
+  translator.sliceAndSet(2);
+
+  let cardNumberStr: string;
+  if (flagged) {
+    const prefixFlag = translator.get(0);
+    translator.sliceAndSet(1);
+    const num = translator.PopVarint();
+    if (prefixFlag === 0x02) {
+      cardNumberStr = `SP${num}`; // special: unpadded, variable width
+    } else if (prefixFlag === 0x01) {
+      cardNumberStr = `R${num.toString().padStart(2, "0")}`;
+    } else if (prefixFlag === 0x00) {
+      cardNumberStr = num.toString().padStart(3, "0");
+    } else {
+      throw new Error(`Unknown number-prefix flag in ${label}: ${prefixFlag}`);
+    }
+  } else {
+    const num = translator.PopVarint();
+    cardNumberStr = num.toString().padStart(3, "0");
+  }
+
+  const setCode = Object.entries(SET_MAP).find(([_, value]) => value === set)?.[0];
+
+  if (!setCode) {
+    throw new Error(`Unknown set code in ${label}: ${set}`);
+  }
+
+  // For signed cards (variant 2), use the signedSuffix option
+  let variantCode: string | undefined;
+  if (variant === 2) {
+    variantCode = signedSuffix;
+  } else {
+    variantCode = Object.entries(VARIANT_MAP).find(
+      ([_, value]) => value === variant
+    )?.[0];
+  }
+
+  return `${setCode}-${cardNumberStr}${variantCode || ""}`;
+}
+
+/**
  * Encodes a Riftbound deck into a shareable deck code
  * @param mainDeck - The main deck cards
  * @param sideboard - Optional sideboard cards (defaults to empty array)
  * @param chosenChampion - Optional chosen champion card code (e.g., "OGN-007")
+ * @param additionalLegends - Optional legends the deck brings alongside its
+ *   starting legend, outside the main deck (e.g., a Neeko deck's three). Order
+ *   is preserved. Supplying any promotes the code to version 6; omitting them
+ *   (or passing an empty array) leaves the emitted version untouched.
  * @returns Base32-encoded deck code string
  * @throws Error if deck format is invalid
  */
 export function getCodeFromDeck(
   mainDeck: Deck,
   sideboard: Deck = [],
-  chosenChampion?: string
+  chosenChampion?: string,
+  additionalLegends: string[] = []
 ): string {
   // Reject malformed counts before any varint processing: a non-integer,
   // zero, negative, or unsafe count would otherwise be silently truncated or
@@ -444,6 +556,16 @@ export function getCodeFromDeck(
     if (!Number.isSafeInteger(card.count) || card.count < 1) {
       throw new Error(
         `Invalid card count for ${card.cardCode}: ${card.count}. Count must be a positive integer.`
+      );
+    }
+  }
+
+  // Additional legends are card codes, not Card objects, so they get their own
+  // shape check before parseCardCode is asked to split them.
+  for (const legend of additionalLegends) {
+    if (typeof legend !== "string" || legend.length === 0) {
+      throw new Error(
+        `Invalid additional legend: ${legend}. Expected a card code string.`
       );
     }
   }
@@ -462,7 +584,8 @@ export function getCodeFromDeck(
   const needsV4 =
     mainDeck.some((c) => hasRuneCode(c.cardCode)) ||
     sideboard.some((c) => hasRuneCode(c.cardCode)) ||
-    (chosenChampion !== undefined && hasRuneCode(chosenChampion));
+    (chosenChampion !== undefined && hasRuneCode(chosenChampion)) ||
+    additionalLegends.some(hasRuneCode);
 
   // Two independent triggers require the v5 sparse scheme:
   //  - a card exceeds the v1-v4 count ceilings (e.g. "Spiderling", any number
@@ -476,9 +599,15 @@ export function getCodeFromDeck(
   const anySpecial =
     mainDeck.some((c) => hasSpecialCode(c.cardCode)) ||
     sideboard.some((c) => hasSpecialCode(c.cardCode)) ||
-    (chosenChampion !== undefined && hasSpecialCode(chosenChampion));
+    (chosenChampion !== undefined && hasSpecialCode(chosenChampion)) ||
+    additionalLegends.some(hasSpecialCode);
 
-  const version = needsV5 || anySpecial ? 5 : needsV4 ? 4 : 3;
+  // v6 exists only to carry the additional-legends block, so it fires on that
+  // and nothing else: a deck without additional legends keeps emitting the
+  // version it emits today, byte-for-byte. v6 reuses the v5 body wholesale.
+  const needsV6 = additionalLegends.length > 0;
+
+  const version = needsV6 ? 6 : needsV5 || anySpecial ? 5 : needsV4 ? 4 : 3;
 
   // Only decks that actually contain an R/SP card need the per-card prefix
   // flag byte. `flagged` is true exactly when some card carries a prefix; an
@@ -508,36 +637,19 @@ export function getCodeFromDeck(
 
   // Encode chosen champion (version 3+)
   if (chosenChampion) {
-    const { set, number, variant } = parseCardCode(chosenChampion);
-    const setValue = SET_MAP[set];
-    if (setValue === undefined) {
-      throw new Error(
-        `Unknown set in chosen champion: ${set}. Valid sets: ${Object.keys(SET_MAP).join(", ")}`
-      );
-    }
-    const variantValue = VARIANT_MAP[variant];
-    if (variantValue === undefined) {
-      throw new Error(
-        `Unknown variant in chosen champion: '${variant}'. Valid variants: ${Object.keys(VARIANT_MAP).join(", ")}`
-      );
-    }
     bytes.push(0x01); // Champion present flag
-    bytes.push(setValue);
-    bytes.push(variantValue);
-    if (flagged && number.startsWith("SP")) {
-      bytes.push(0x02); // Special flag
-      bytes.push(...VarintTranslator.GetVarint(parseInt(number.slice(2))));
-    } else if (flagged && number.startsWith("R")) {
-      bytes.push(0x01); // Rune flag
-      bytes.push(...VarintTranslator.GetVarint(parseInt(number.slice(1))));
-    } else if (flagged) {
-      bytes.push(0x00); // Normal card flag
-      bytes.push(...VarintTranslator.GetVarint(parseInt(number)));
-    } else {
-      bytes.push(...VarintTranslator.GetVarint(parseInt(number)));
-    }
+    bytes.push(...encodeCardRef(chosenChampion, flagged, "chosen champion"));
   } else {
     bytes.push(0x00); // No champion flag
+  }
+
+  // Encode additional legends (version 6+), appended after the champion
+  // trailer: a count, then one card reference each in the order supplied.
+  if (version >= 6) {
+    bytes.push(...VarintTranslator.GetVarint(additionalLegends.length));
+    for (const legend of additionalLegends) {
+      bytes.push(...encodeCardRef(legend, flagged, "additional legend"));
+    }
   }
 
   return base32Encode(new Uint8Array(bytes));
@@ -545,9 +657,16 @@ export function getCodeFromDeck(
 
 /**
  * Decodes a Riftbound deck code into deck and sideboard
+ *
+ * The starting legend (if the deck has one) rides in `mainDeck` as an ordinary
+ * card, exactly as it always has; `additionalLegends` is a separate list that
+ * never overlaps it, so the two are distinguishable without inspecting card
+ * types. It is `undefined` for v1-v5 codes, which carry no legends block.
+ *
  * @param code - Base32-encoded deck code string
  * @param options - Optional decode options
- * @returns Object containing mainDeck and sideboard arrays
+ * @returns Object containing mainDeck, sideboard, chosen champion and
+ *   additional legends
  * @throws Error if code is invalid or unsupported
  */
 export function getDeckFromCode(
@@ -617,50 +736,25 @@ export function getDeckFromCode(
     translator.sliceAndSet(1);
 
     if (hasChampion === 0x01) {
-      const set = translator.get(0);
-      const variant = translator.get(1);
-      translator.sliceAndSet(2);
+      chosenChampion = decodeCardRef(
+        translator,
+        flagged,
+        signedSuffix,
+        "champion"
+      );
+    }
+  }
 
-      let cardNumberStr: string;
-      if (flagged) {
-        const prefixFlag = translator.get(0);
-        translator.sliceAndSet(1);
-        const num = translator.PopVarint();
-        if (prefixFlag === 0x02) {
-          cardNumberStr = `SP${num}`; // special: unpadded, variable width
-        } else if (prefixFlag === 0x01) {
-          cardNumberStr = `R${num.toString().padStart(2, "0")}`;
-        } else if (prefixFlag === 0x00) {
-          cardNumberStr = num.toString().padStart(3, "0");
-        } else {
-          throw new Error(
-            `Unknown number-prefix flag in champion: ${prefixFlag}`
-          );
-        }
-      } else {
-        const num = translator.PopVarint();
-        cardNumberStr = num.toString().padStart(3, "0");
-      }
-
-      const setCode = Object.entries(SET_MAP).find(
-        ([_, value]) => value === set
-      )?.[0];
-
-      if (!setCode) {
-        throw new Error(`Unknown set code in champion: ${set}`);
-      }
-
-      // For signed cards (variant 2), use the signedSuffix option
-      let variantCode: string | undefined;
-      if (variant === 2) {
-        variantCode = signedSuffix;
-      } else {
-        variantCode = Object.entries(VARIANT_MAP).find(
-          ([_, value]) => value === variant
-        )?.[0];
-      }
-
-      chosenChampion = `${setCode}-${cardNumberStr}${variantCode || ""}`;
+  // Decode additional legends (version 6+ only). Older codes have no legends
+  // block at all, so they report `undefined` rather than an empty list.
+  let additionalLegends: string[] | undefined;
+  if (version >= 6) {
+    const numLegends = translator.PopVarint();
+    additionalLegends = [];
+    for (let i = 0; i < numLegends; i++) {
+      additionalLegends.push(
+        decodeCardRef(translator, flagged, signedSuffix, "additional legend")
+      );
     }
   }
 
@@ -668,6 +762,7 @@ export function getDeckFromCode(
     mainDeck,
     sideboard,
     chosenChampion,
+    additionalLegends,
   };
 }
 

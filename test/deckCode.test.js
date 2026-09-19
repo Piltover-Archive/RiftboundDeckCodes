@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 
 const { getCodeFromDeck, getDeckFromCode } = require("../dist/index.js");
 const golden = require("./fixtures/golden.json");
+const goldenV6 = require("./fixtures/golden-v6.json");
 
 // --- helpers (operate only on the public wire format / public API) ---
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -68,6 +69,8 @@ const shape = (r) => ({
   mainDeck: normDeck(r.mainDeck),
   sideboard: normDeck(r.sideboard),
   champion: r.chosenChampion ?? null,
+  // Order-sensitive, unlike the decks: additional legends are a list, not a set.
+  legends: r.additionalLegends ?? null,
 });
 
 const oneCard = (cardCode, count) => [{ cardCode, count }];
@@ -85,6 +88,17 @@ test.describe("backward compatibility (1.3.0 golden vectors)", () => {
           g.input.mainDeck,
           g.input.sideboard,
           g.input.chosenChampion
+        );
+        assert.equal(code, g.code);
+      });
+      test("an explicit empty legends list changes nothing", () => {
+        // The v6 trigger is "has additional legends", not "was told about
+        // them" — passing [] must not promote the version or shift a byte.
+        const code = getCodeFromDeck(
+          g.input.mainDeck,
+          g.input.sideboard,
+          g.input.chosenChampion,
+          []
         );
         assert.equal(code, g.code);
       });
@@ -261,6 +275,7 @@ test.describe("v5 round-trips", () => {
         mainDeck: normDeck(c.main),
         sideboard: normDeck(c.side),
         champion: c.champion ?? null,
+        legends: null, // v5 carries no legends block
       });
     });
   }
@@ -420,13 +435,270 @@ test.describe("SP (special) number prefix", () => {
 });
 
 // ---------------------------------------------------------------------------
+// v6 WIRE FORMAT — additional legends. Locked against an INDEPENDENT
+// reimplementation of the v6 layout (a second encoder written from the spec,
+// not from this library), same discipline as the v5 vectors above.
+// ---------------------------------------------------------------------------
+test.describe("v6 golden vectors (independent oracle)", () => {
+  for (const g of goldenV6) {
+    test.describe(g.name, () => {
+      test("encodes to the exact recorded string", () => {
+        const code = getCodeFromDeck(
+          g.input.mainDeck,
+          g.input.sideboard,
+          g.input.chosenChampion,
+          g.input.additionalLegends
+        );
+        assert.equal(code, g.code);
+      });
+      test("is format 1, version 6", () => {
+        assert.equal(formatOf(g.code), 1);
+        assert.equal(versionOf(g.code), 6);
+      });
+      test("decodes to the exact recorded deck", () => {
+        assert.deepEqual(shape(getDeckFromCode(g.code)), shape(g.decoded));
+      });
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// v6 TRIGGER GATING — v6 fires on additional legends and on nothing else.
+// ---------------------------------------------------------------------------
+test.describe("v6 trigger gating", () => {
+  const main = [
+    { cardCode: "OGN-004", count: 3 },
+    { cardCode: "OGN-013", count: 1 },
+  ];
+  const legends = ["OGN-280", "OGN-288", "OGN-292"];
+
+  test("no legends argument keeps the deck on v3", () => {
+    assert.equal(versionOf(getCodeFromDeck(main)), 3);
+  });
+  test("an empty legends array keeps the deck on v3", () => {
+    assert.equal(versionOf(getCodeFromDeck(main, [], undefined, [])), 3);
+  });
+  test("one additional legend triggers v6", () => {
+    assert.equal(versionOf(getCodeFromDeck(main, [], undefined, ["OGN-280"])), 6);
+  });
+  test("three additional legends trigger v6", () => {
+    assert.equal(versionOf(getCodeFromDeck(main, [], undefined, legends)), 6);
+  });
+  test("a rune deck with no legends stays v4", () => {
+    const runes = [...main, { cardCode: "SFD-R02", count: 3 }];
+    assert.equal(versionOf(getCodeFromDeck(runes)), 4);
+  });
+  test("a rune deck with legends becomes v6, not v4", () => {
+    const runes = [...main, { cardCode: "SFD-R02", count: 3 }];
+    assert.equal(versionOf(getCodeFromDeck(runes, [], undefined, legends)), 6);
+  });
+  test("a high-copy deck with no legends stays v5", () => {
+    assert.equal(versionOf(getCodeFromDeck(oneCard("VEN-097", 20))), 5);
+  });
+  test("a high-copy deck with legends becomes v6, not v5", () => {
+    const code = getCodeFromDeck(oneCard("VEN-097", 20), [], undefined, legends);
+    assert.equal(versionOf(code), 6);
+  });
+  test("v6 keeps the v5 body, so a high-copy deck still round-trips", () => {
+    const main40 = oneCard("VEN-097", 40);
+    const decoded = getDeckFromCode(
+      getCodeFromDeck(main40, [], undefined, legends)
+    );
+    assert.deepEqual(decoded.mainDeck, main40);
+    assert.deepEqual(decoded.additionalLegends, legends);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v6 ROUND-TRIPS — the whole point: legends survive, and the starting legend
+// stays distinguishable from them.
+// ---------------------------------------------------------------------------
+test.describe("v6 round-trips", () => {
+  // A Neeko deck: the starting legend rides in the main deck as it always has,
+  // and the three additional legends travel in their own block.
+  const startingLegend = "OGN-280";
+  const main = [
+    { cardCode: "OGN-004", count: 3 },
+    { cardCode: "OGN-009", count: 3 },
+    { cardCode: startingLegend, count: 1 },
+  ];
+  const legends = ["OGN-288", "OGN-292", "VEN-001"];
+
+  test("additional legends survive a round trip", () => {
+    const decoded = getDeckFromCode(
+      getCodeFromDeck(main, [], undefined, legends)
+    );
+    assert.deepEqual(decoded.additionalLegends, legends);
+  });
+
+  test("the starting legend is distinct from the additional legends", () => {
+    const decoded = getDeckFromCode(
+      getCodeFromDeck(main, [], undefined, legends)
+    );
+    // The starting legend comes back in the main deck, and only there — which
+    // is what makes "which one is the starting legend" recoverable at all.
+    assert.ok(
+      decoded.mainDeck.some((c) => c.cardCode === startingLegend),
+      "starting legend should stay in the main deck"
+    );
+    assert.ok(
+      !decoded.additionalLegends.includes(startingLegend),
+      "starting legend must not leak into the additional legends"
+    );
+    assert.equal(decoded.mainDeck.length, main.length);
+  });
+
+  test("a deck with four legends keeps all four, correctly assigned", () => {
+    const decoded = getDeckFromCode(
+      getCodeFromDeck(main, [], undefined, legends)
+    );
+    assert.deepEqual(shape(decoded), {
+      mainDeck: normDeck(main),
+      sideboard: [],
+      champion: null,
+      legends,
+    });
+  });
+
+  test("legend order is preserved (it is a list, not a set)", () => {
+    const reversed = [...legends].reverse();
+    const decoded = getDeckFromCode(
+      getCodeFromDeck(main, [], undefined, reversed)
+    );
+    assert.deepEqual(decoded.additionalLegends, reversed);
+  });
+
+  test("additional legends coexist with a chosen champion", () => {
+    const side = [{ cardCode: "OGN-022", count: 2 }];
+    const decoded = getDeckFromCode(
+      getCodeFromDeck(main, side, "OGN-009", legends)
+    );
+    assert.deepEqual(shape(decoded), {
+      mainDeck: normDeck(main),
+      sideboard: normDeck(side),
+      champion: "OGN-009",
+      legends,
+    });
+  });
+
+  test("a legend variant suffix survives", () => {
+    const decoded = getDeckFromCode(
+      getCodeFromDeck(main, [], undefined, ["OGN-288a", "OGN-292b", "VEN-001"])
+    );
+    assert.deepEqual(decoded.additionalLegends, [
+      "OGN-288a",
+      "OGN-292b",
+      "VEN-001",
+    ]);
+  });
+
+  test("signedSuffix is honored for a signed legend", () => {
+    const code = getCodeFromDeck(main, [], undefined, ["OGN-288*"]);
+    assert.deepEqual(getDeckFromCode(code, { signedSuffix: "*" })
+      .additionalLegends, ["OGN-288*"]);
+    assert.deepEqual(getDeckFromCode(code).additionalLegends, ["OGN-288s"]);
+  });
+
+  test("a rune legend sets the prefix bit and keeps its R prefix", () => {
+    // Nothing else in this deck carries a prefix, so the legend alone has to
+    // flip the deck-level bit — otherwise its "R" would be encoded away.
+    const code = getCodeFromDeck(main, [], undefined, ["SFD-R02"]);
+    assert.equal(prefixBitOf(code), 1);
+    assert.deepEqual(getDeckFromCode(code).additionalLegends, ["SFD-R02"]);
+  });
+
+  test("an SP legend sets the prefix bit and keeps its SP prefix", () => {
+    const code = getCodeFromDeck(main, [], undefined, ["VEN-SP1"]);
+    assert.equal(prefixBitOf(code), 1);
+    assert.deepEqual(getDeckFromCode(code).additionalLegends, ["VEN-SP1"]);
+  });
+
+  test("an all-normal v6 deck leaves the prefix bit at 0", () => {
+    assert.equal(prefixBitOf(getCodeFromDeck(main, [], undefined, legends)), 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v1-v5 codes carry no legends block at all — they must report `undefined`,
+// not an empty array, so callers can tell "none" from "not supported".
+// ---------------------------------------------------------------------------
+test.describe("older codes report no additional legends", () => {
+  for (const g of golden) {
+    test(`${g.name} decodes with additionalLegends === undefined`, () => {
+      assert.equal(getDeckFromCode(g.code).additionalLegends, undefined);
+    });
+  }
+  test("a v5 code decodes with additionalLegends === undefined", () => {
+    const code = getCodeFromDeck(oneCard("VEN-097", 20));
+    assert.equal(versionOf(code), 5);
+    assert.equal(getDeckFromCode(code).additionalLegends, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v6 encode validation and fail-loud decoding of the legends block.
+// ---------------------------------------------------------------------------
+test.describe("v6 legend validation", () => {
+  const main = oneCard("OGN-004", 3);
+
+  test("a malformed legend card code throws", () => {
+    assert.throws(
+      () => getCodeFromDeck(main, [], undefined, ["not-a-card"]),
+      /Invalid card code format/
+    );
+  });
+  test("an empty-string legend throws", () => {
+    assert.throws(
+      () => getCodeFromDeck(main, [], undefined, [""]),
+      /Invalid additional legend/
+    );
+  });
+  test("a non-string legend throws", () => {
+    assert.throws(
+      () => getCodeFromDeck(main, [], undefined, [null]),
+      /Invalid additional legend/
+    );
+  });
+  test("an unknown set in a legend throws", () => {
+    assert.throws(
+      () => getCodeFromDeck(main, [], undefined, ["ZZZ-001"]),
+      /Unknown set in additional legend/
+    );
+  });
+
+  test("an unknown prefix flag in a legend throws (distinct from champion)", () => {
+    // v6, prefix bit = 1, empty main + sideboard, no champion, 1 legend
+    // (set 5, variant 0) whose prefix flag is an unsupported 0x03.
+    const bad = bytesToBase32([
+      (1 << 4) | 6, 0x01, 0x00, 0x00, 0x00, 0x01, 5, 0, 0x03, 1,
+    ]);
+    assert.throws(
+      () => getDeckFromCode(bad),
+      /Unknown number-prefix flag in additional legend/
+    );
+  });
+
+  test("an unknown set code in a legend throws", () => {
+    // v6, prefix bit = 0, empty main + sideboard, no champion, 1 legend whose
+    // set byte (9) is not in the set map.
+    const bad = bytesToBase32([
+      (1 << 4) | 6, 0x00, 0x00, 0x00, 0x00, 0x01, 9, 0, 1,
+    ]);
+    assert.throws(
+      () => getDeckFromCode(bad),
+      /Unknown set code in additional legend/
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // (f) FORWARD-COMPAT GUARD — a code with a version byte beyond what we support
 //     must throw loudly, never silently misread.
 // ---------------------------------------------------------------------------
 test.describe("forward-compatibility guard", () => {
-  test("a version-6 code throws 'Unsupported version'", () => {
-    const future = bytesToBase32([(1 << 4) | 6]); // format 1, version 6
-    assert.throws(() => getDeckFromCode(future), /Unsupported version: 6/);
+  test("a version-7 code throws 'Unsupported version'", () => {
+    const future = bytesToBase32([(1 << 4) | 7]); // format 1, version 7
+    assert.throws(() => getDeckFromCode(future), /Unsupported version: 7/);
   });
   test("a version-15 code throws 'Unsupported version'", () => {
     const future = bytesToBase32([(1 << 4) | 15]);
