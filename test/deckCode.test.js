@@ -737,6 +737,99 @@ test.describe("fail-loud decoding of unknown v5 tokens", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Unknown VARIANT bytes fail loud, everywhere. Sets and variants are appended
+// to the maps without a format-version bump (1.3.0 added VEN/RAD that way), so
+// the version guard cannot catch a code written by a newer library. A dropped
+// suffix would silently hand back a different, valid-looking card.
+// ---------------------------------------------------------------------------
+test.describe("unknown variant bytes throw rather than degrading to base", () => {
+  // Variant 4 is the next id a future release would hand out (the map ends at
+  // b = 3), so this is the shape of the code a newer library would emit.
+  const FUTURE = 4;
+
+  // v3 body: counts 12..1, all empty except count 1 -> 1 group, 1 card.
+  const v3WithVariant = (variant) => {
+    const bytes = [(1 << 4) | 3];
+    for (let i = 0; i < 11; i++) bytes.push(0); // counts 12..2 empty
+    bytes.push(1, 1, 0, variant, 12); // count 1: 1 group, 1 card, set 0
+    for (let i = 0; i < 3; i++) bytes.push(0); // sideboard counts 3..1 empty
+    bytes.push(0); // no champion
+    return bytesToBase32(bytes);
+  };
+  // v5 sparse body, unflagged: 1 count (=1), 1 group, 1 card.
+  const v5WithVariant = (variant) =>
+    bytesToBase32([(1 << 4) | 5, 0, 1, 1, 1, 1, 0, variant, 12, 0, 0]);
+  // v5 sparse body, flagged: same, with a 0x00 normal prefix byte.
+  const v5FlaggedWithVariant = (variant) =>
+    bytesToBase32([(1 << 4) | 5, 1, 1, 1, 1, 1, 0, variant, 0x00, 12, 0, 0]);
+  // v5 champion trailer.
+  const v5ChampionWithVariant = (variant) =>
+    bytesToBase32([(1 << 4) | 5, 0, 0, 0, 0x01, 0, variant, 12]);
+  // v6 legends block.
+  const v6LegendWithVariant = (variant) =>
+    bytesToBase32([(1 << 4) | 6, 0, 0, 0, 0x00, 1, 0, variant, 12]);
+
+  test("v3 main deck throws", () => {
+    assert.throws(
+      () => getDeckFromCode(v3WithVariant(FUTURE)),
+      /Unknown variant code: 4/
+    );
+  });
+  test("v5 sparse body (unflagged) throws", () => {
+    assert.throws(
+      () => getDeckFromCode(v5WithVariant(FUTURE)),
+      /Unknown variant code: 4/
+    );
+  });
+  test("v5 sparse body (flagged) throws", () => {
+    assert.throws(
+      () => getDeckFromCode(v5FlaggedWithVariant(FUTURE)),
+      /Unknown variant code: 4/
+    );
+  });
+  test("the champion trailer throws, naming the champion", () => {
+    assert.throws(
+      () => getDeckFromCode(v5ChampionWithVariant(FUTURE)),
+      /Unknown variant code in champion: 4/
+    );
+  });
+  test("the v6 legends block throws, naming the legend", () => {
+    assert.throws(
+      () => getDeckFromCode(v6LegendWithVariant(FUTURE)),
+      /Unknown variant code in additional legend: 4/
+    );
+  });
+
+  // Regression guard: the base variant resolves to "", which is falsy. A
+  // `!variantCode` check here would reject every ordinary card in the library.
+  test("the base variant (0) still decodes, empty suffix and all", () => {
+    assert.deepEqual(getDeckFromCode(v3WithVariant(0)).mainDeck, [
+      { cardCode: "OGN-012", count: 1 },
+    ]);
+    assert.deepEqual(getDeckFromCode(v6LegendWithVariant(0)).additionalLegends, [
+      "OGN-012",
+    ]);
+  });
+  test("every known variant still decodes", () => {
+    const expected = { 0: "OGN-012", 1: "OGN-012a", 2: "OGN-012s", 3: "OGN-012b" };
+    for (const [variant, cardCode] of Object.entries(expected)) {
+      assert.deepEqual(
+        getDeckFromCode(v3WithVariant(Number(variant))).mainDeck,
+        [{ cardCode, count: 1 }],
+        `variant ${variant}`
+      );
+    }
+  });
+  test("an unknown SET still reports the set, not the variant", () => {
+    // Both are wrong here; the set error must still win, as it did before.
+    assert.throws(
+      () => getDeckFromCode(bytesToBase32([(1 << 4) | 6, 0, 0, 0, 0x00, 1, 9, FUTURE, 12])),
+      /Unknown set code in additional legend: 9/
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Encode input validation — malformed counts are rejected, not silently wrapped.
 // ---------------------------------------------------------------------------
 test.describe("encode rejects invalid card counts", () => {

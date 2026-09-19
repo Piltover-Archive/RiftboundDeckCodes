@@ -89,6 +89,8 @@ export const VARIANT_MAP: Record<string, number> = {
 
 **Important:** Once released, never change existing IDs as this will break existing deck codes!
 
+**Also note:** new set and variant IDs are appended *without* a format version bump, so the version guard will not stop an older library from meeting a code that uses one. Both decode paths reject unknown identifiers loudly (`Unknown set code` / `Unknown variant code`) rather than guessing, so the failure is visible — but it does mean every consumer must upgrade before codes using a new ID are shared.
+
 ## Implementing in Other Languages
 
 We welcome implementations of RiftboundDeckCodes in other programming languages! To ensure compatibility:

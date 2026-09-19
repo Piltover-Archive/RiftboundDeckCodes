@@ -105,6 +105,46 @@ function parseCardCode(cardCode: string): {
 }
 
 /**
+ * Resolves a variant byte to its card-code suffix.
+ *
+ * An unrecognised variant throws rather than quietly degrading to the base
+ * suffix. Set and variant ids are appended to the maps *without* a format
+ * version bump (1.3.0 added VEN and RAD exactly that way), so the version guard
+ * cannot catch a code written by a newer library. Dropping an unknown suffix
+ * would hand back a different, valid-looking card instead of failing — the same
+ * trap the v5 number-prefix flags already refuse to fall into.
+ *
+ * Note the base variant legitimately resolves to `""`, so a miss is `undefined`
+ * and never merely falsy.
+ *
+ * @param variant - The variant byte read off the wire
+ * @param signedSuffix - The suffix to use for signed cards ('s' or '*')
+ * @param label - Where this variant was read, for error messages
+ */
+function resolveVariant(
+  variant: number,
+  signedSuffix: "s" | "*",
+  label?: string
+): string {
+  // For signed cards (variant 2), use the signedSuffix option
+  if (variant === 2) {
+    return signedSuffix;
+  }
+
+  const variantCode = Object.entries(VARIANT_MAP).find(
+    ([_, value]) => value === variant
+  )?.[0];
+
+  if (variantCode === undefined) {
+    throw new Error(
+      `Unknown variant code${label ? ` in ${label}` : ""}: ${variant}`
+    );
+  }
+
+  return variantCode;
+}
+
+/**
  * Groups cards by set and variant for efficient encoding
  */
 function groupBySetAndVariant(cards: Card[]): SetVariantGroup[] {
@@ -231,19 +271,11 @@ function decodeDeckSection(
         ([_, value]) => value === set
       )?.[0];
 
-      // For signed cards (variant 2), use the signedSuffix option
-      let variantCode: string | undefined;
-      if (variant === 2) {
-        variantCode = signedSuffix;
-      } else {
-        variantCode = Object.entries(VARIANT_MAP).find(
-          ([_, value]) => value === variant
-        )?.[0];
-      }
-
       if (!setCode) {
         throw new Error(`Unknown set code: ${set}`);
       }
+
+      const variantCode = resolveVariant(variant, signedSuffix);
 
       for (let j = 0; j < numCards; j++) {
         let cardNumberStr: string;
@@ -264,7 +296,7 @@ function decodeDeckSection(
         }
 
         deck.push({
-          cardCode: `${setCode}-${cardNumberStr}${variantCode || ""}`,
+          cardCode: `${setCode}-${cardNumberStr}${variantCode}`,
           count,
         });
       }
@@ -370,19 +402,11 @@ function decodeDeckSectionSparse(
         ([_, value]) => value === set
       )?.[0];
 
-      // For signed cards (variant 2), use the signedSuffix option
-      let variantCode: string | undefined;
-      if (variant === 2) {
-        variantCode = signedSuffix;
-      } else {
-        variantCode = Object.entries(VARIANT_MAP).find(
-          ([_, value]) => value === variant
-        )?.[0];
-      }
-
       if (!setCode) {
         throw new Error(`Unknown set code: ${set}`);
       }
+
+      const variantCode = resolveVariant(variant, signedSuffix);
 
       for (let j = 0; j < numCards; j++) {
         let cardNumberStr: string;
@@ -391,7 +415,7 @@ function decodeDeckSectionSparse(
           const num = translator.PopVarint();
           cardNumberStr = num.toString().padStart(3, "0");
           deck.push({
-            cardCode: `${setCode}-${cardNumberStr}${variantCode || ""}`,
+            cardCode: `${setCode}-${cardNumberStr}${variantCode}`,
             count,
           });
           continue;
@@ -414,7 +438,7 @@ function decodeDeckSectionSparse(
         }
 
         deck.push({
-          cardCode: `${setCode}-${cardNumberStr}${variantCode || ""}`,
+          cardCode: `${setCode}-${cardNumberStr}${variantCode}`,
           count,
         });
       }
@@ -518,17 +542,9 @@ function decodeCardRef(
     throw new Error(`Unknown set code in ${label}: ${set}`);
   }
 
-  // For signed cards (variant 2), use the signedSuffix option
-  let variantCode: string | undefined;
-  if (variant === 2) {
-    variantCode = signedSuffix;
-  } else {
-    variantCode = Object.entries(VARIANT_MAP).find(
-      ([_, value]) => value === variant
-    )?.[0];
-  }
+  const variantCode = resolveVariant(variant, signedSuffix, label);
 
-  return `${setCode}-${cardNumberStr}${variantCode || ""}`;
+  return `${setCode}-${cardNumberStr}${variantCode}`;
 }
 
 /**

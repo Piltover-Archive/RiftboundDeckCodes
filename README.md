@@ -158,6 +158,8 @@ Variants are mapped as follows:
 
 > **Note:** Both `s` and `*` are valid suffixes for signed cards (e.g., `OGN-007s` and `OGN-007*` are equivalent). When decoding, `s` is used by default. See [Decoding Options](#decoding-options) for customization.
 
+> **Note:** Decoding an unrecognised variant identifier throws rather than falling back to the base variant, so a code written by a library with a newer variant fails loudly instead of silently returning a different card. The same applies to unknown set identifiers and unknown number-prefix flags.
+
 ## Installation
 
 ```bash
