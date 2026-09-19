@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-09-19
+
+### Added
+
+- **Additional Legends (Version 6)**: `getCodeFromDeck` accepts a fourth argument, `additionalLegends` — the legends a deck brings *alongside* its starting legend, outside the main deck (e.g. the three a **Neeko** deck chooses). They round-trip through `getDeckFromCode` as `additionalLegends`.
+- **Legends block**: Version 6 appends a count plus one card reference per legend after the chosen-champion trailer, mirroring how Version 3 appended the champion. Order is preserved — the block is a list, not a set. Each legend uses the same card reference layout as the champion and obeys the same deck-level prefix bit, so a rune or `SP` legend flips that bit for the whole deck.
+- **The starting legend is recoverable again**: it still rides in `mainDeck`, and because additional legends now live in their own block and never appear in that array, the two are distinguishable without inspecting card types. Previously a fourth legend-typed card made *which one is the starting legend* ambiguous, and which one survived depended on the encoder's set/variant/number sort.
+- **Golden vectors for Version 6**: committed with and without a chosen champion, plus rune and high-copy cases, each cross-checked against an independent reimplementation of the v6 layout.
+- **Loud rejection of unknown variants**: an unrecognised variant byte now throws on decode instead of silently dropping the suffix and returning a base card. This closes the same class of gap the Version 5 number-prefix flags already covered, and it applies to every decode path — main deck, sideboard, chosen champion and additional legends.
+
+### Changed
+
+- Decks carrying additional legends now encode as Version 6. Version 6 reuses the Version 5 body wholesale (deck-level prefix bit and sparse count encoding), so a v6 deck gets high copy counts for free.
+- Decoding a Version 1–5 code reports `additionalLegends` as `undefined` rather than an empty array, so callers can tell "this deck has none" from "this code cannot carry them".
+- The chosen-champion trailer and the legends block now share one encode/decode path internally, so the two cannot drift apart. The bytes it writes are unchanged.
+- Variant resolution is now a single shared function rather than three copies, so all decode paths reject unknown variants identically.
+
+### Compatibility
+
+- ✅ Can decode Version 1, 2, 3, 4, and 5 codes — unchanged.
+- ✅ A deck **without** additional legends still encodes to a byte-identical string, on its existing version (verified: every committed golden vector, including when an empty legends array is passed explicitly).
+- ✅ `getCodeFromDeck`'s new parameter is optional — existing call sites compile and behave identically.
+- ❌ Version 6 codes require an updated library; older libraries reject them with an `Unsupported version` error rather than misreading them. **The backend must be able to decode v6 before any surface is allowed to emit it.**
+- ⚠️ A code carrying an unrecognised variant byte now throws `Unknown variant code` where it previously decoded to a base-variant card. No code this library has ever emitted is affected — v1–6 only write variants `0`–`3` — so every real deck code and every golden vector decodes identically. Only malformed input, or a code written by a future library that adds a variant id, changes behaviour: from silently wrong to a thrown error. Note that set and variant ids are added *without* a format-version bump (1.3.0 added `VEN` and `RAD` that way), so the version guard alone could not catch this.
+
+---
+
 ## [1.4.0] - 2026-07-15
 
 ### Added

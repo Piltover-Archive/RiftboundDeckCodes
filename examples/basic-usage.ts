@@ -195,6 +195,39 @@ function exampleRuneDeck() {
 	console.log('');
 }
 
+// Example 7: Additional legends (Version 6)
+function exampleAdditionalLegends() {
+	console.log('=== Example 7: Additional Legends (V6) ===\n');
+
+	// A Neeko deck: the starting legend sits in the main deck as an ordinary
+	// single-copy card, and the three legends Neeko entitles the deck to travel
+	// alongside it, outside the 40.
+	const startingLegend = "OGN-280";
+	const mainDeck: Deck = [
+		{ cardCode: "OGN-004", count: 3 },
+		{ cardCode: "OGN-009", count: 3 },
+		{ cardCode: startingLegend, count: 1 },
+	];
+
+	const additionalLegends = ["OGN-288", "OGN-292", "VEN-001"];
+
+	// Supplying additional legends is what promotes the code to Version 6.
+	const deckCode = getCodeFromDeck(mainDeck, [], undefined, additionalLegends);
+	console.log('Encoded deck code (V6):', deckCode);
+
+	const decoded: DeckWithSideboard = getDeckFromCode(deckCode);
+	console.log('\nStarting legend (from the main deck):', startingLegend);
+	console.log('Additional legends:', decoded.additionalLegends);
+
+	// Without additional legends the same deck keeps its existing version,
+	// byte-for-byte identical to what earlier releases emitted.
+	const sameDeckNoLegends = getCodeFromDeck(mainDeck);
+	console.log('\nSame deck without legends (still V3):', sameDeckNoLegends);
+	console.log('Additional legends:', getDeckFromCode(sameDeckNoLegends).additionalLegends);
+
+	console.log('');
+}
+
 // Run all examples
 console.log('╔════════════════════════════════════════════════════════╗');
 console.log('║     Riftbound Deck Codes - Usage Examples             ║');
@@ -207,5 +240,6 @@ exampleDecoding();
 exampleErrorHandling();
 exampleSetsAndVariants();
 exampleRuneDeck();
+exampleAdditionalLegends();
 
 console.log('✅ All examples completed!');

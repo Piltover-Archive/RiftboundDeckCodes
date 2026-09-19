@@ -1,0 +1,218 @@
+[
+  {
+    "name": "v6-basic (additional legends, no champion, no sideboard)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-004",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-009",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        }
+      ],
+      "sideboard": [],
+      "additionalLegends": [
+        "OGN-280",
+        "OGN-288",
+        "OGN-292"
+      ]
+    },
+    "code": "CYAAEAYBAIAAABAJAEAQCAAABUAAAAYAACMAEAAAUABAAAFEAI",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-004",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-009",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        }
+      ],
+      "sideboard": [],
+      "additionalLegends": [
+        "OGN-280",
+        "OGN-288",
+        "OGN-292"
+      ]
+    }
+  },
+  {
+    "name": "v6-champion (additional legends, sideboard and chosen champion)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-004",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-009",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-103",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-024",
+          "count": 2
+        }
+      ],
+      "chosenChampion": "OGN-103",
+      "additionalLegends": [
+        "OGN-280",
+        "OGN-288a",
+        "VEN-292"
+      ]
+    },
+    "code": "CYAAEAYBAMAAABAJM4AQCAIAAAGQCAQBAIAAAFQYAEAAAZYDAAAJQAQAAGQAEBIAUQBA",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-004",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-009",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-103",
+          "count": 3
+        },
+        {
+          "cardCode": "OGN-013",
+          "count": 1
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "OGN-022",
+          "count": 2
+        },
+        {
+          "cardCode": "OGN-024",
+          "count": 2
+        }
+      ],
+      "chosenChampion": "OGN-103",
+      "additionalLegends": [
+        "OGN-280",
+        "OGN-288a",
+        "VEN-292"
+      ]
+    }
+  },
+  {
+    "name": "v6-runes (rune in main deck forces the per-card flag byte)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-004",
+          "count": 3
+        },
+        {
+          "cardCode": "SFD-R02",
+          "count": 3
+        }
+      ],
+      "sideboard": [],
+      "additionalLegends": [
+        "OGN-280",
+        "OGN-288",
+        "OGN-292"
+      ]
+    },
+    "code": "CYAQCAYCAEAAAAAEAEBQAAICAAAAGAAAACMAEAAAACQAEAAAACSAE",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "OGN-004",
+          "count": 3
+        },
+        {
+          "cardCode": "SFD-R02",
+          "count": 3
+        }
+      ],
+      "sideboard": [],
+      "additionalLegends": [
+        "OGN-280",
+        "OGN-288",
+        "OGN-292"
+      ]
+    }
+  },
+  {
+    "name": "v6-high-copy (v5 sparse body, SP legend, champion)",
+    "input": {
+      "mainDeck": [
+        {
+          "cardCode": "VEN-097",
+          "count": 20
+        },
+        {
+          "cardCode": "VEN-001",
+          "count": 3
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "VEN-050",
+          "count": 4
+        }
+      ],
+      "chosenChampion": "VEN-001",
+      "additionalLegends": [
+        "VEN-SP1",
+        "OGN-280",
+        "RAD-005"
+      ]
+    },
+    "code": "CYAQEFABAECQAADBAMAQCBIAAAAQCBABAECQAABSAECQAAABAMCQAAQBAAAABGACAYAAABI",
+    "decoded": {
+      "mainDeck": [
+        {
+          "cardCode": "VEN-097",
+          "count": 20
+        },
+        {
+          "cardCode": "VEN-001",
+          "count": 3
+        }
+      ],
+      "sideboard": [
+        {
+          "cardCode": "VEN-050",
+          "count": 4
+        }
+      ],
+      "chosenChampion": "VEN-001",
+      "additionalLegends": [
+        "VEN-SP1",
+        "OGN-280",
+        "RAD-005"
+      ]
+    }
+  }
+]

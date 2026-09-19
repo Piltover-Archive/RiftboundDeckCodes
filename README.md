@@ -39,7 +39,7 @@ The deck code library accepts a Riftbound deck as a list of `Card` objects. This
 
 ## Process
 
-Decks are encoded via arranging VarInts (big endian) into an array and then base32 encoding into a string.
+Decks are encoded via arranging VarInts (little endian — least-significant 7-bit group first, as in LEB128) into an array and then base32 encoding into a string.
 
 All encodings begin with 4 bits for format and 4 bits for version.
 
@@ -50,13 +50,14 @@ All encodings begin with 4 bits for format and 4 bits for version.
 | 1      | 3       | January 10, 2026  | Adds chosen champion support.                                             |
 | 1      | 4       | March 4, 2026     | Adds rune-card support with a normal/rune flag before each card number.   |
 | 1      | 5       | July 15, 2026     | Adds high copy-count support (a single card may exceed the v1–4 count ceilings of main 12 / sideboard 3, via a sparse count encoding), `SP` special-card number-prefix support (flag byte `0x02`), and a deck-level prefix bit so all-normal decks omit per-card flag bytes. |
+| 1      | 6       | September 19, 2026 | Adds additional-legend support: a legends block appended after the chosen-champion trailer, carrying the legends a deck brings alongside its starting legend. |
 
 The list of cards are then encoded according to the following scheme:
 
 1. Cards are grouped together based on how many copies of the card are in the deck (e.g., cards with twelve copies, cards with three copies, cards with two copies, and cards with a single copy are grouped together).
 2. Within those groups, lists of cards are created which share the same set AND variant.
-3. The set/variant lists are ordered by increasing length. The contents of the set/variant lists are ordered alphanumerically by card number.
-4. Variable length integer ([varints](https://en.wikipedia.org/wiki/Variable-length_quantity)) (big endian) bytes for each ordered group of cards are written into the byte array according to the following convention:
+3. The set/variant lists are ordered by set identifier, then by variant identifier (both ascending). The contents of the set/variant lists are ordered alphanumerically by card number, comparing digit runs numerically.
+4. Variable length integer ([varints](https://en.wikipedia.org/wiki/Variable-length_quantity)) (little endian) bytes for each ordered group of cards are written into the byte array according to the following convention:
    - [how many lists of set/variant combination have twelve copies of a card]
      - [how many cards within this set/variant combination follow]
      - [set]
@@ -100,6 +101,24 @@ Then, rather than walking a fixed count range, each Version 5 section writes onl
 
 Set/variant grouping and ordering are unchanged. The chosen champion follows the same prefix-bit convention. Because Version 5 is a new version number, libraries built before it reject v5 codes (see the version guard) rather than misreading them, and all Version 1–4 codes continue to decode unchanged.
 
+#### Version 6: additional legends
+
+Some decks bring legends *in addition* to their starting legend — a Neeko deck chooses three. The format had no concept of a legend at all: the starting legend rides in the main-deck array as an ordinary single-copy card and is recovered on decode by looking up the card's type. A fourth legend-typed card in that same array makes *which one is the starting legend* unrecoverable.
+
+**Version 6** appends a legends block after the chosen-champion trailer, exactly as Version 3 appended the champion:
+
+- [how many additional legends follow]
+  - [set] [variant] [flag byte, only if the deck prefix bit is `1`] [card number]
+  - ... repeated, **in the order supplied**
+
+Order is preserved — the block is a list, not a set — so a caller that stores an explicit display order gets it back. Each legend is written with the same card reference layout as the chosen champion, and obeys the same deck-level prefix bit, so a rune or `SP` legend sets that bit for the whole deck.
+
+A deck is encoded as **Version 6 only when it actually has additional legends**, following the same trigger-predicate pattern as Version 4 (rune decks) and Version 5 (high copy counts / `SP` cards). A deck without them still encodes as Version 3, 4 or 5, byte-for-byte identical to earlier releases. Version 6 reuses the Version 5 body wholesale — the deck-level prefix bit and the sparse count encoding — so a v6 deck gets high copy counts for free.
+
+The starting legend still rides in the main deck. Because the additional legends are now in their own block and never appear in the main-deck array, the two are distinguishable without inspecting card types, which is what makes the starting legend recoverable again.
+
+Decoding a Version 1–5 code reports `additionalLegends` as `undefined` rather than an empty array, so a caller can tell "this deck has none" from "this code cannot carry them".
+
 ### Set Identifiers
 
 Sets are mapped as follows:
@@ -138,6 +157,8 @@ Variants are mapped as follows:
 | 2       | 3                  | b            | Alternate art B |
 
 > **Note:** Both `s` and `*` are valid suffixes for signed cards (e.g., `OGN-007s` and `OGN-007*` are equivalent). When decoding, `s` is used by default. See [Decoding Options](#decoding-options) for customization.
+
+> **Note:** Decoding an unrecognised variant identifier throws rather than falling back to the base variant, so a code written by a library with a newer variant fails loudly instead of silently returning a different card. The same applies to unknown set identifiers and unknown number-prefix flags.
 
 ## Installation
 
@@ -204,6 +225,15 @@ console.log(deckCodeNoChampion);
 // Encode without sideboard (pass empty array for sideboard)
 const deckCodeNoSideboard = getCodeFromDeck(mainDeck, [], "OGN-103");
 console.log(deckCodeNoSideboard);
+
+// Encode with additional legends (e.g. a Neeko deck) — this and only this
+// promotes the code to Version 6. The starting legend stays in the main deck.
+const deckCodeWithLegends = getCodeFromDeck(mainDeck, sideboard, "OGN-103", [
+  "OGN-280",
+  "OGN-288",
+  "OGN-292",
+]);
+console.log(deckCodeWithLegends);
 ```
 
 ### Decoding a Deck
@@ -225,6 +255,11 @@ console.log("Sideboard:", decoded.sideboard);
 
 console.log("Chosen Champion:", decoded.chosenChampion);
 // The chosen champion card code (e.g., "OGN-103") or undefined if not set
+
+console.log("Additional Legends:", decoded.additionalLegends);
+// The legends the deck brings alongside its starting legend, in the order they
+// were encoded (e.g. ["OGN-280", "OGN-288", "OGN-292"]).
+// `undefined` for Version 1-5 codes, which carry no legends block.
 ```
 
 ### Decoding Options
@@ -248,8 +283,9 @@ const starDecode = getDeckFromCode(code, { signedSuffix: "*" });
 
 - **No Game Rule Validation**: This library only encodes/decodes deck data. It does not validate Riftbound game rules (card limits, sideboard size, etc.). Validation should be done in your application.
 - **Card Counts**: In Versions 1–4, the main deck supports counts 1-12 and the sideboard 1-3. Version 5 lifts this ceiling for high-copy cards (e.g. Spiderling), supporting any number of copies of a single card. Counts must be positive integers; `getCodeFromDeck` throws on a zero, negative, or non-integer count.
-- **Format Versions**: New non-rune deck codes encode as Version 3. Decks containing `R`-prefixed rune card numbers encode as Version 4. Decks where a single card exceeds the count ceilings (`> 12` main / `> 3` sideboard), or that contain an `SP`-prefixed special card, encode as Version 5.
-- **Backward Compatibility**: Can decode Version 1, 2, 3, 4, and 5 codes. Version 1 and 2 codes return `chosenChampion: undefined`.
+- **Format Versions**: New non-rune deck codes encode as Version 3. Decks containing `R`-prefixed rune card numbers encode as Version 4. Decks where a single card exceeds the count ceilings (`> 12` main / `> 3` sideboard), or that contain an `SP`-prefixed special card, encode as Version 5. Decks carrying additional legends encode as Version 6.
+- **Additional Legends**: These are the legends a deck brings *alongside* its starting legend, outside the main deck. The starting legend itself is unchanged — it stays in `mainDeck`. Passing an empty array is the same as passing nothing: the emitted version is untouched.
+- **Backward Compatibility**: Can decode Version 1, 2, 3, 4, 5, and 6 codes. Version 1 and 2 codes return `chosenChampion: undefined`. Version 1–5 codes return `additionalLegends: undefined`.
 
 ## Implementations
 
@@ -259,7 +295,7 @@ The TypeScript implementation in this repository is the reference implementation
 
 | Name               | Language   | Version\* | Maintainer      |
 | ------------------ | ---------- | --------- | --------------- |
-| RiftboundDeckCodes | TypeScript | 5         | PiltoverArchive |
+| RiftboundDeckCodes | TypeScript | 6         | PiltoverArchive |
 
 \*Version refers to the MAX_KNOWN_VERSION supported by the implementation.
 
